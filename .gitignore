@@ -7,7 +7,48 @@
 .buildlog/
 .history
 
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Flutter Rust Bridge generated files
+lib/src/rust/frb_generated.dart
+lib/src/rust/frb_generated.io.dart
+lib/src/rust/frb_generated.web.dart
+lib/src/rust/models.dart
+
+# Rust build artifacts
+rust/target/
+rust/Cargo.lock
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+
+# Logs and debugging
+*.log
+logs/
+debug/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
 
 # Flutter repo-specific
 /bin/cache/
