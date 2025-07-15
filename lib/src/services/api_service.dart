@@ -1,219 +1,228 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'logger_service.dart';
 import '../config/app_config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+/// ApiService handles HTTP communication with the Rust backend API.
 class ApiService {
-  static String get baseUrl => AppConfig.apiBaseUrl;
-
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;
-  ApiService._internal();
+  ApiService._internal() {
+    _loadTokens();
+  }
 
-  // Register user
-  Future<Map<String, dynamic>> register({
-    required String username,
+  String? _accessToken;
+  String? _refreshToken;
+
+  Future<void> _saveTokens() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_accessToken != null && _refreshToken != null) {
+      await prefs.setString('accessToken', _accessToken!);
+      await prefs.setString('refreshToken', _refreshToken!);
+    }
+  }
+
+  Future<void> _loadTokens() async {
+    final prefs = await SharedPreferences.getInstance();
+    _accessToken = prefs.getString('accessToken');
+    _refreshToken = prefs.getString('refreshToken');
+  }
+
+  Future<void> _clearTokens() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('accessToken');
+    await prefs.remove('refreshToken');
+    _accessToken = null;
+    _refreshToken = null;
+  }
+
+  /// Logs in a user and stores tokens on success.
+  Future<bool> login({required String email, required String password}) async {
+    final url = Uri.parse('${AppConfig.authLoginEndpoint}');
+    final body = jsonEncode({'email': email, 'password': password});
+    print('LOGIN URL: $url');
+    print('LOGIN BODY: $body');
+    print('LOGIN HEADERS: ${{'Content-Type': 'application/json'}}');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: body,
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      _accessToken = data['access_token'];
+      _refreshToken = data['refresh_token'];
+      await _saveTokens();
+      return true;
+    } else {
+      print('LOGIN RESPONSE STATUS: ${response.statusCode}');
+      print('LOGIN RESPONSE BODY: ${response.body}');
+      return false;
+    }
+  }
+
+  /// Registers a new user and stores tokens on success.
+  Future<bool> register({
     required String email,
     required String password,
   }) async {
-    final logger = LoggerService();
-    logger.info('Attempting to register user: $username');
-
-    final url = '$baseUrl/register';
-    final body = jsonEncode({
-      'username': username,
-      'email': email,
-      'password': password,
-    });
-
-    logger.debug('Register request: URL=$url, Body=$body');
-
-    try {
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: body,
-      );
-
-      logger.info(
-        'Register response: Status=${response.statusCode}, Body=${response.body}',
-      );
-
-      if (response.statusCode == 200) {
-        final result = jsonDecode(response.body);
-        logger.info('User registered successfully: $username');
-        return result;
-      } else {
-        final error = jsonDecode(response.body);
-        final errorMessage = error['error'] ?? 'Registration failed';
-        logger.error('Registration failed: $errorMessage');
-        throw Exception(errorMessage);
-      }
-    } catch (e) {
-      logger.error('Exception during registration: $e');
-      rethrow;
-    }
-  }
-
-  // Login user
-  Future<Map<String, dynamic>> login({
-    required String username,
-    required String password,
-  }) async {
-    final logger = LoggerService();
-    logger.info('Attempting to login user: $username');
-
-    final url = '$baseUrl/login';
-    final body = jsonEncode({'username': username, 'password': password});
-
-    logger.debug('Login request: URL=$url');
-
-    try {
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
-        body: body,
-      );
-
-      logger.info('Login response: Status=${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        final result = jsonDecode(response.body);
-        logger.info('User logged in successfully: $username');
-        return result;
-      } else {
-        final error = jsonDecode(response.body);
-        final errorMessage = error['error'] ?? 'Login failed';
-        logger.error('Login failed: $errorMessage');
-        throw Exception(errorMessage);
-      }
-    } catch (e) {
-      logger.error('Exception during login: $e');
-      rethrow;
-    }
-  }
-
-  // Refresh token
-  Future<Map<String, dynamic>> refreshToken(String refreshToken) async {
+    final url = Uri.parse('${AppConfig.authRegisterEndpoint}');
     final response = await http.post(
-      Uri.parse('$baseUrl/refresh'),
+      url,
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'refresh_token': refreshToken}),
+      body: jsonEncode({'email': email, 'password': password}),
     );
-
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+      final data = jsonDecode(response.body);
+      _accessToken = data['access_token'];
+      _refreshToken = data['refresh_token'];
+      await _saveTokens();
+      return true;
     } else {
-      final error = jsonDecode(response.body);
-      throw Exception(error['error'] ?? 'Token refresh failed');
+      return false;
     }
   }
 
-  // Create notebook
-  Future<Map<String, dynamic>> createNotebook({
-    required String accessToken,
+  /// Refreshes the access token using the stored refresh token.
+  Future<bool> refreshToken() async {
+    if (_refreshToken == null) return false;
+    final url = Uri.parse('${AppConfig.authRefreshEndpoint}');
+    final response = await http.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'refresh_token': _refreshToken}),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      _accessToken = data['access_token'];
+      _refreshToken = data['refresh_token'];
+      await _saveTokens();
+      return true;
+    } else {
+      return false;
+    }
+  }
+
+  /// Returns true if the user is logged in (access token is present).
+  bool isLoggedIn() => _accessToken != null;
+
+  /// Logs out the user (clears tokens from memory and storage).
+  void logout() {
+    _clearTokens();
+  }
+
+  /// Gets the user id from the current access token (if JWT, decodes payload).
+  String? getUserId() {
+    if (_accessToken == null) return null;
+    try {
+      final parts = _accessToken!.split('.');
+      if (parts.length != 3) return null;
+      final payload = utf8.decode(
+        base64Url.decode(base64Url.normalize(parts[1])),
+      );
+      final payloadMap = jsonDecode(payload);
+      return payloadMap['sub']?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Returns the current access token (for use in API calls).
+  String? get accessToken => _accessToken;
+
+  /// Gets all user notebooks (requires access token)
+  Future<List<dynamic>> getUserNotebooks() async {
+    if (_accessToken == null) return [];
+    final url = Uri.parse(AppConfig.notebooksEndpoint);
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_accessToken',
+      },
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data is List) {
+        return data;
+      } else if (data is Map) {
+        return [data];
+      } else {
+        return [];
+      }
+    } else {
+      return [];
+    }
+  }
+
+  /// Creates a new notebook (requires access token)
+  Future<bool> createNotebook({
     required String name,
     String? description,
     String? color,
   }) async {
+    if (_accessToken == null) return false;
+    final url = Uri.parse(AppConfig.notebooksEndpoint);
     final response = await http.post(
-      Uri.parse('$baseUrl/protected/notebooks'),
+      url,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $accessToken',
+        'Authorization': 'Bearer $_accessToken',
       },
       body: jsonEncode({
         'name': name,
-        'description': description,
-        'color': color,
+        if (description != null) 'description': description,
+        if (color != null) 'color': color,
       }),
     );
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      return jsonDecode(response.body);
-    } else {
-      final error = jsonDecode(response.body);
-      throw Exception(error['error'] ?? 'Failed to create notebook');
-    }
+    return response.statusCode == 200 || response.statusCode == 201;
   }
 
-  // Get user notebooks
-  Future<List<Map<String, dynamic>>> getUserNotebooks(
-    String accessToken,
-  ) async {
+  /// Gets all notes for a notebook (requires access token)
+  Future<List<dynamic>> getNotebookNotes(String notebookId) async {
+    if (_accessToken == null) return [];
+    final url = Uri.parse('${AppConfig.notesEndpoint}?notebook_id=$notebookId');
     final response = await http.get(
-      Uri.parse('$baseUrl/protected/notebooks'),
-      headers: {'Authorization': 'Bearer $accessToken'},
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $_accessToken',
+      },
     );
-
     if (response.statusCode == 200) {
-      final Map<String, dynamic> data = jsonDecode(response.body);
-      final List<dynamic> notebooks = data['notebooks'] ?? [];
-      return notebooks.cast<Map<String, dynamic>>();
+      final data = jsonDecode(response.body);
+      if (data is List) {
+        return data;
+      } else if (data is Map) {
+        return [data];
+      } else {
+        return [];
+      }
     } else {
-      final error = jsonDecode(response.body);
-      throw Exception(error['error'] ?? 'Failed to get notebooks');
+      return [];
     }
   }
 
-  // Create note
-  Future<Map<String, dynamic>> createNote({
-    required String accessToken,
+  /// Creates a new note in a notebook (requires access token)
+  Future<bool> createNote({
     required String notebookId,
     required String title,
     required String content,
   }) async {
+    if (_accessToken == null) return false;
+    final url = Uri.parse(AppConfig.notesEndpoint);
     final response = await http.post(
-      Uri.parse('$baseUrl/protected/notebooks/$notebookId/notes'),
+      url,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $accessToken',
+        'Authorization': 'Bearer $_accessToken',
       },
       body: jsonEncode({
+        'notebook_id': notebookId,
         'title': title,
         'content': content,
-        // Add 'tags' and 'is_pinned' if needed in the future
       }),
     );
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      if (response.body.isNotEmpty) {
-        return jsonDecode(response.body);
-      } else {
-        // Return empty map if response is empty
-        return {};
-      }
-    } else {
-      if (response.body.isNotEmpty) {
-        final error = jsonDecode(response.body);
-        throw Exception(error['error'] ?? 'Failed to create note');
-      } else {
-        throw Exception('Failed to create note');
-      }
-    }
-  }
-
-  // Get notebook notes
-  Future<List<Map<String, dynamic>>> getNotebookNotes(
-    String notebookId,
-    String accessToken,
-  ) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/protected/notebooks/$notebookId/notes'),
-      headers: {'Authorization': 'Bearer $accessToken'},
-    );
-
-    if (response.statusCode == 200) {
-      final Map<String, dynamic> data = jsonDecode(response.body);
-      final List<dynamic> notes = data['notes'] ?? [];
-      return notes.cast<Map<String, dynamic>>();
-    } else {
-      if (response.body.isNotEmpty) {
-        final error = jsonDecode(response.body);
-        throw Exception(error['error'] ?? 'Failed to get notes');
-      } else {
-        throw Exception('Failed to get notes');
-      }
-    }
+    return response.statusCode == 200 || response.statusCode == 201;
   }
 }

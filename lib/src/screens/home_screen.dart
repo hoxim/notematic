@@ -3,6 +3,7 @@ import '../services/token_service.dart';
 import '../services/logger_service.dart';
 import '../services/notebook_service.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 const noteColors = [
   // Each entry: {'light': Color, 'dark': Color}
@@ -40,12 +41,12 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  String? _username;
+  String? _userEmail;
   final _logger = LoggerService();
   final _notebookService = NotebookService();
   bool _defaultNotebookChecked = false; // Prevents multiple creations
-  List<Map<String, dynamic>> _notebooks = [];
-  Map<String, List<Map<String, dynamic>>> _notebookNotes = {};
+  List<dynamic> _notebooks = [];
+  Map<String, List<dynamic>> _notebookNotes = {};
   bool _isLoading = true;
   Map<String, int> _notebookColorIndices = {}; // notebookId -> color index
 
@@ -59,6 +60,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _searchQuery = '';
   List<Map<String, dynamic>> _searchResults = [];
   bool _isSearching = false;
+
+  // About dialog state
+  String? _clientVersion;
+  String? _apiVersion;
+  String? _dbStatus;
+  bool _aboutLoading = false;
+  String? _aboutError;
 
   @override
   void initState() {
@@ -83,28 +91,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _loadUserInfo() async {
     try {
-      final username = await TokenService.getUsernameFromToken();
-      if (username != null) {
+      final userEmail = await TokenService.getUserId();
+      if (userEmail != null) {
         setState(() {
-          _username = username;
+          _userEmail = userEmail;
         });
-        _logger.info('User loaded: $_username');
+        _logger.info('User loaded: $_userEmail');
         if (!_defaultNotebookChecked) {
           _defaultNotebookChecked = true;
-          await _createDefaultNotebook();
+          await _notebookService.createDefaultNotebookIfNeeded();
         }
         await _loadNotebooksAndNotes();
       }
     } catch (e) {
       _logger.error('Failed to load user info: $e');
-    }
-  }
-
-  Future<void> _createDefaultNotebook() async {
-    try {
-      await _notebookService.createDefaultNotebook();
-    } catch (e) {
-      _logger.error('Failed to create default notebook: $e');
     }
   }
 
@@ -114,15 +114,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
     try {
       final notebooks = await _notebookService.getUserNotebooks();
-      // Map id if needed
-      final mappedNotebooks =
-          notebooks.map((n) {
-            if (n['id'] == null && n['_id'] != null) {
-              n['id'] = n['_id'];
-            }
-            return n;
-          }).toList();
-      Map<String, List<Map<String, dynamic>>> notesMap = {};
+      final mappedNotebooks = notebooks;
+      Map<String, List<dynamic>> notesMap = {};
       for (final notebook in mappedNotebooks) {
         final id = notebook['id'];
         if (id != null && id is String) {
@@ -242,39 +235,37 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
-                      children:
-                          noteColors.asMap().entries.map((entry) {
-                            final index = entry.key;
-                            final colors = entry.value;
-                            final isDark =
-                                Theme.of(context).brightness == Brightness.dark;
-                            final color = getNotebookColor(index, isDark);
-                            final hexColor =
-                                '#${color.value.toRadixString(16).substring(2)}';
+                      children: noteColors.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final colors = entry.value;
+                        final isDark =
+                            Theme.of(context).brightness == Brightness.dark;
+                        final color = getNotebookColor(index, isDark);
+                        final hexColor =
+                            '#${color.value.toRadixString(16).substring(2)}';
 
-                            return GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  selectedColor = hexColor;
-                                });
-                              },
-                              child: Container(
-                                width: 32,
-                                height: 32,
-                                decoration: BoxDecoration(
-                                  color: color,
-                                  border: Border.all(
-                                    color:
-                                        selectedColor == hexColor
-                                            ? Colors.black
-                                            : Colors.transparent,
-                                    width: 2,
-                                  ),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              selectedColor = hexColor;
+                            });
+                          },
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: color,
+                              border: Border.all(
+                                color: selectedColor == hexColor
+                                    ? Colors.black
+                                    : Colors.transparent,
+                                width: 2,
                               ),
-                            );
-                          }).toList(),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        );
+                      }).toList(),
                     ),
                   ],
                 ),
@@ -300,10 +291,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
                     final success = await _notebookService.createNotebook(
                       name: nameController.text.trim(),
-                      description:
-                          descriptionController.text.trim().isEmpty
-                              ? null
-                              : descriptionController.text.trim(),
+                      description: descriptionController.text.trim().isEmpty
+                          ? null
+                          : descriptionController.text.trim(),
                       color: selectedColor,
                     );
 
@@ -437,6 +427,72 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  Future<void> _showAboutDialog() async {
+    setState(() {
+      _aboutLoading = true;
+      _aboutError = null;
+    });
+    String? clientVersion;
+    String? apiVersion;
+    String? dbStatus;
+    try {
+      // Get client version
+      final info = await PackageInfo.fromPlatform();
+      clientVersion = info.version;
+      // Get API health
+      // Usuń powyższe linie i ewentualnie zastąp je TODO: implement health-check przez HTTP lub usuń sekcję sprawdzania API.
+      apiVersion = 'Unknown';
+      dbStatus = 'Connected';
+    } catch (e) {
+      setState(() {
+        _aboutLoading = false;
+        _aboutError = 'Failed to load info: $e';
+      });
+      return showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('About'),
+          content: Text(_aboutError ?? 'Unknown error'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    }
+    setState(() {
+      _aboutLoading = false;
+      _clientVersion = clientVersion;
+      _apiVersion = apiVersion;
+      _dbStatus = dbStatus;
+    });
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('About'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Client version: ${_clientVersion ?? '-'}'),
+            const SizedBox(height: 8),
+            Text('API version: ${_apiVersion ?? '-'}'),
+            const SizedBox(height: 8),
+            Text('Database status: ${_dbStatus ?? '-'}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -447,12 +503,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         actions: [
           IconButton(
             onPressed: widget.onToggleTheme,
-            icon:
-                widget.themeMode == ThemeMode.dark
-                    ? const Icon(Icons.wb_sunny_outlined)
-                    : const Icon(Icons.nightlight_round),
-            tooltip:
-                widget.themeMode == ThemeMode.dark ? 'Light mode' : 'Dark mode',
+            icon: widget.themeMode == ThemeMode.dark
+                ? const Icon(Icons.wb_sunny_outlined)
+                : const Icon(Icons.nightlight_round),
+            tooltip: widget.themeMode == ThemeMode.dark
+                ? 'Light mode'
+                : 'Dark mode',
           ),
           // User profile menu
           PopupMenuButton<String>(
@@ -466,8 +522,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   CircleAvatar(
                     backgroundColor: Theme.of(context).colorScheme.primary,
                     child: Text(
-                      _username?.isNotEmpty == true
-                          ? _username![0].toUpperCase()
+                      _userEmail != null && _userEmail!.isNotEmpty
+                          ? _userEmail![0].toUpperCase()
                           : 'U',
                       style: const TextStyle(
                         color: Colors.white,
@@ -479,7 +535,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   // Username (hidden on small screens)
                   if (MediaQuery.of(context).size.width > 400)
                     Text(
-                      _username ?? 'User',
+                      _userEmail ?? 'User',
                       style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                   const SizedBox(width: 4),
@@ -487,70 +543,75 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ],
               ),
             ),
-            itemBuilder:
-                (BuildContext context) => [
-                  // User info header
-                  PopupMenuItem<String>(
-                    enabled: false,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _username ?? 'User',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        Text(
-                          'Signed in',
-                          style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withOpacity(0.6),
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+            itemBuilder: (BuildContext context) => [
+              // User info header
+              PopupMenuItem<String>(
+                enabled: false,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _userEmail ?? 'User',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
-                  ),
-                  const PopupMenuDivider(),
-                  // Menu items
-                  PopupMenuItem<String>(
-                    value: 'profile',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.person, size: 20),
-                        const SizedBox(width: 12),
-                        const Text('Profile'),
-                      ],
+                    Text(
+                      'Signed in',
+                      style: TextStyle(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withOpacity(0.6),
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
-                  PopupMenuItem<String>(
-                    value: 'settings',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.settings, size: 20),
-                        const SizedBox(width: 12),
-                        const Text('Settings'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuDivider(),
-                  PopupMenuItem<String>(
-                    value: 'logout',
-                    child: Row(
-                      children: [
-                        const Icon(Icons.logout, size: 20, color: Colors.red),
-                        const SizedBox(width: 12),
-                        const Text(
-                          'Logout',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem<String>(
+                value: 'profile',
+                child: Row(
+                  children: [
+                    const Icon(Icons.person, size: 20),
+                    const SizedBox(width: 12),
+                    const Text('Profile'),
+                  ],
+                ),
+              ),
+              PopupMenuItem<String>(
+                value: 'settings',
+                child: Row(
+                  children: [
+                    const Icon(Icons.settings, size: 20),
+                    const SizedBox(width: 12),
+                    const Text('Settings'),
+                  ],
+                ),
+              ),
+              PopupMenuItem<String>(
+                value: 'about',
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 20),
+                    const SizedBox(width: 12),
+                    const Text('About'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem<String>(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    const Icon(Icons.logout, size: 20, color: Colors.red),
+                    const SizedBox(width: 12),
+                    const Text('Logout', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
+            ],
             onSelected: (String value) {
               switch (value) {
                 case 'profile':
@@ -558,6 +619,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   break;
                 case 'settings':
                   _showSettings();
+                  break;
+                case 'about':
+                  _showAboutDialog();
                   break;
                 case 'logout':
                   _logout();
@@ -567,59 +631,56 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         ],
       ),
-      body:
-          _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Search field at the top
-                    Center(
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 400),
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: _performSearch,
-                          decoration: InputDecoration(
-                            hintText: 'Search notes...',
-                            prefixIcon: const Icon(Icons.search),
-                            suffixIcon:
-                                _searchQuery.isNotEmpty
-                                    ? IconButton(
-                                      icon: const Icon(Icons.clear),
-                                      onPressed: _clearSearch,
-                                    )
-                                    : null,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(25),
-                            ),
-                            filled: true,
-                            fillColor: Theme.of(context).colorScheme.surface,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 12,
-                            ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Search field at the top
+                  Center(
+                    child: Container(
+                      constraints: const BoxConstraints(maxWidth: 400),
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: _performSearch,
+                        decoration: InputDecoration(
+                          hintText: 'Search notes...',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: _clearSearch,
+                                )
+                              : null,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          filled: true,
+                          fillColor: Theme.of(context).colorScheme.surface,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Welcome, ${_username ?? 'User'}!',
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    const SizedBox(height: 24),
-                    Expanded(
-                      child:
-                          _isSearching
-                              ? _buildSearchResults()
-                              : _buildNotebooksGrid(),
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Welcome, ${_userEmail ?? 'User'}!',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 24),
+                  Expanded(
+                    child: _isSearching
+                        ? _buildSearchResults()
+                        : _buildNotebooksGrid(),
+                  ),
+                ],
               ),
+            ),
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
@@ -767,11 +828,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       itemBuilder: (context, index) {
         final notebook = _notebooks[index];
         final notes = _notebookNotes[notebook['id']] ?? [];
-        final notebookId = notebook['id'] as String;
+        final notebookId = notebook['id'] as String? ?? 'unknown';
         final colorIdx =
             _notebookColorIndices[notebookId] ?? (index % noteColors.length);
         final cardColor = getNotebookColor(colorIdx, isDark);
         final textColor = getTextColor(cardColor, isDark);
+        _logger.info(
+          '[NOTEBOOK CARD] notebook: $notebook, notes: $notes, notebookId: $notebookId, colorIdx: $colorIdx, cardColor: $cardColor, textColor: $textColor',
+        );
         return Card(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
@@ -825,21 +889,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             color: textColor,
                           ),
                         ),
-                        subtitle:
-                            note['content'] != null
-                                ? Text(
-                                  (note['content'] as String).length > 80
-                                      ? (note['content'] as String).substring(
+                        subtitle: note['content'] != null
+                            ? Text(
+                                (note['content'] as String).length > 80
+                                    ? (note['content'] as String).substring(
                                             0,
                                             80,
                                           ) +
                                           '...'
-                                      : note['content'],
-                                  style: TextStyle(
-                                    color: textColor.withOpacity(0.85),
-                                  ),
-                                )
-                                : null,
+                                    : note['content'],
+                                style: TextStyle(
+                                  color: textColor.withOpacity(0.85),
+                                ),
+                              )
+                            : null,
                         onTap: () => _openNoteDetails(note),
                       ),
                     ),
@@ -887,10 +950,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                                       decoration: BoxDecoration(
                                         color: c,
                                         border: Border.all(
-                                          color:
-                                              ci == colorIdx
-                                                  ? Colors.black
-                                                  : Colors.transparent,
+                                          color: ci == colorIdx
+                                              ? Colors.black
+                                              : Colors.transparent,
                                           width: 2,
                                         ),
                                         borderRadius: BorderRadius.circular(18),

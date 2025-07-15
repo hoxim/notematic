@@ -1,93 +1,60 @@
-import 'package:notematic/src/rust/api/auth.dart';
-import 'package:notematic/src/services/token_service.dart';
-import 'package:notematic/src/services/logger_service.dart';
+import 'api_service.dart';
+import 'logger_service.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
   AuthService._internal();
   final _logger = LoggerService();
+  final _api = ApiService();
 
-  // Register new user
+  /// Registers a new user using HTTP API. Returns true on success.
   Future<bool> register({
-    required String username,
     required String email,
     required String password,
   }) async {
     try {
-      final response = await registerUser(
-        username: username,
-        email: email,
-        password: password,
-      );
-
-      // Save tokens
-      await TokenService.saveTokens(
-        accessToken: response.accessToken,
-        refreshToken: response.refreshToken,
-        userId: response.accessToken, // We'll extract user ID from token later
-      );
-
-      return true;
+      return await _api.register(email: email, password: password);
     } catch (e) {
       _logger.error('Registration error: $e');
       return false;
     }
   }
 
-  // Login user
-  Future<bool> login({
-    required String username,
-    required String password,
-  }) async {
+  /// Logs in a user using HTTP API. Returns true on success.
+  Future<bool> login({required String email, required String password}) async {
     try {
-      final response = await loginUser(username: username, password: password);
-
-      // Save tokens
-      await TokenService.saveTokens(
-        accessToken: response.accessToken,
-        refreshToken: response.refreshToken,
-        userId: response.accessToken, // We'll extract user ID from token later
-      );
-
-      return true;
+      return await _api.login(email: email, password: password);
     } catch (e) {
       _logger.error('Login error: $e');
       return false;
     }
   }
 
-  // Refresh token
+  /// Refreshes the session token using HTTP API. Returns true on success.
   Future<bool> refreshToken() async {
     try {
-      final refreshToken = await TokenService.getRefreshToken();
-      if (refreshToken == null) {
-        return false;
-      }
-
-      final response = await refreshUserToken(refreshToken: refreshToken);
-
-      // Save new tokens
-      await TokenService.saveTokens(
-        accessToken: response.accessToken,
-        refreshToken: response.refreshToken,
-        userId: response.accessToken, // We'll extract user ID from token later
-      );
-
-      return true;
+      return await _api.refreshToken();
     } catch (e) {
       _logger.error('Token refresh error: $e');
       return false;
     }
   }
 
-  // Logout user
+  /// Logs out the user (clears tokens from memory).
   Future<void> logout() async {
-    await TokenService.clearTokens();
+    _api.logout();
   }
 
-  // Check if user is logged in
+  /// Checks if the user is logged in (access token is present).
   Future<bool> isLoggedIn() async {
-    return await TokenService.isLoggedIn();
+    return _api.isLoggedIn();
   }
+
+  /// Gets the user id from the current session (JWT sub).
+  Future<String?> getUserId() async {
+    return _api.getUserId();
+  }
+
+  // Google login temporarily disabled.
 }

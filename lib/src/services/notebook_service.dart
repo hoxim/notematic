@@ -1,99 +1,53 @@
-import 'package:notematic/src/services/api_service.dart';
-import 'package:notematic/src/services/token_service.dart';
-import 'package:notematic/src/services/logger_service.dart';
+import 'api_service.dart';
 
+/// NotebookService is a thin wrapper for HTTP API notebook/note functions.
 class NotebookService {
   static final NotebookService _instance = NotebookService._internal();
   factory NotebookService() => _instance;
   NotebookService._internal();
-  final _logger = LoggerService();
-  final _apiService = ApiService();
+  final _api = ApiService();
 
+  /// Creates a new notebook using HTTP API.
   Future<bool> createNotebook({
     required String name,
     String? description,
     String? color,
   }) async {
-    try {
-      return await withValidToken((accessToken) async {
-        await _apiService.createNotebook(
-          accessToken: accessToken,
-          name: name,
-          description: description,
-          color: color,
-        );
-        return true;
-      });
-    } catch (e) {
-      _logger.error('Create notebook error: $e');
-      return false;
-    }
+    return await _api.createNotebook(
+      name: name,
+      description: description,
+      color: color,
+    );
   }
 
-  Future<List<Map<String, dynamic>>> getUserNotebooks() async {
-    try {
-      return await withValidToken((accessToken) async {
-        return await _apiService.getUserNotebooks(accessToken);
-      });
-    } catch (e) {
-      _logger.error('Get notebooks error: $e');
-      return [];
-    }
+  /// Gets all user notebooks using HTTP API.
+  Future<List<dynamic>> getUserNotebooks() async {
+    return await _api.getUserNotebooks();
   }
 
+  /// Creates a new note in a notebook using HTTP API.
   Future<bool> createNote({
     required String notebookId,
     required String title,
     required String content,
   }) async {
-    try {
-      return await withValidToken((accessToken) async {
-        await _apiService.createNote(
-          accessToken: accessToken,
-          notebookId: notebookId,
-          title: title,
-          content: content,
-        );
-        return true;
-      });
-    } catch (e) {
-      _logger.error('Create note error: $e');
-      return false;
-    }
+    return await _api.createNote(
+      notebookId: notebookId,
+      title: title,
+      content: content,
+    );
   }
 
-  Future<List<Map<String, dynamic>>> getNotebookNotes(String notebookId) async {
-    try {
-      return await withValidToken((accessToken) async {
-        return await _apiService.getNotebookNotes(notebookId, accessToken);
-      });
-    } catch (e) {
-      _logger.error('Get notes error: $e');
-      return [];
-    }
+  /// Gets all notes for a notebook using HTTP API.
+  Future<List<dynamic>> getNotebookNotes(String notebookId) async {
+    return await _api.getNotebookNotes(notebookId);
   }
 
-  Future<bool> createDefaultNotebook() async {
-    try {
-      final notebooks = await getUserNotebooks();
-      if (notebooks.isNotEmpty) {
-        return true;
-      }
-      _logger.info('Creating default notebook for new user');
-      final success = await createNotebook(
-        name: 'General',
-        description: 'Default notebook for your notes',
-        color: '#2196F3',
-      );
-      if (success) {
-        _logger.info('Default notebook created successfully');
-      } else {
-        _logger.error('Failed to create default notebook');
-      }
-      return success;
-    } catch (e) {
-      _logger.error('Error creating default notebook: $e');
-      return false;
+  /// Creates a default notebook for a new user if none exist.
+  Future<void> createDefaultNotebookIfNeeded() async {
+    final notebooks = await getUserNotebooks();
+    if (notebooks.isEmpty) {
+      await createNotebook(name: 'My Notebook');
     }
   }
 }
