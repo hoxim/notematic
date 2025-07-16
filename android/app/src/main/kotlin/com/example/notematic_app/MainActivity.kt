@@ -1,4 +1,4 @@
-package com.example.notematic_app
+package com.hoxim.notematic
 
 import io.flutter.embedding.android.FlutterActivity
 

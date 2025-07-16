@@ -17,11 +17,21 @@ class AppConfig {
     return 'http://$host:$port';
   }
 
-  static String get apiHost => _getEnv('API_HOST');
-  static int get apiPort => int.tryParse(_getEnv('API_PORT')) ?? 0;
-  static String get environment => _getEnv('ENVIRONMENT');
+  static String get apiHost =>
+      _getEnv('API_HOST').isNotEmpty ? _getEnv('API_HOST') : '192.109.245.95';
+  static int get apiPort => int.tryParse(_getEnv('API_PORT')) ?? 8080;
+  static String get environment =>
+      _getEnv('ENVIRONMENT').isNotEmpty ? _getEnv('ENVIRONMENT') : 'production';
   static bool get isDevelopment => environment == 'development';
   static bool get isProduction => environment == 'production';
+  static bool get enableAutoLoginOnWeb =>
+      _getEnv('ENABLE_AUTO_LOGIN_ON_WEB') == 'true';
+
+  // Development tokens for auto-login in development mode
+  static String get devAccessToken => _getEnv('DEV_ACCESS_TOKEN');
+  static String get devRefreshToken => _getEnv('DEV_REFRESH_TOKEN');
+  static bool get hasDevTokens =>
+      devAccessToken.isNotEmpty && devRefreshToken.isNotEmpty;
 
   // Get API endpoints
   static String get authRegisterEndpoint => '$apiBaseUrl/register';
@@ -39,6 +49,8 @@ class AppConfig {
     print('API Port: $apiPort');
     print('Is Development: $isDevelopment');
     print('Is Production: $isProduction');
+    print('Enable Auto Login On Web: $enableAutoLoginOnWeb');
+    print('Has Dev Tokens: $hasDevTokens');
     print('========================');
   }
 }

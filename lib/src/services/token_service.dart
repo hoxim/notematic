@@ -5,7 +5,7 @@ class TokenService {
   static final ApiService _api = ApiService();
 
   /// Returns true if the user is logged in (calls ApiService)
-  static Future<bool> isLoggedIn() async => _api.isLoggedIn();
+  static Future<bool> isLoggedIn() async => await _api.isLoggedIn();
 
   /// Logs out the user (clears tokens from memory)
   static Future<void> clearTokens() async => _api.logout();

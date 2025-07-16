@@ -114,13 +114,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
     try {
       final notebooks = await _notebookService.getUserNotebooks();
-      final mappedNotebooks = notebooks;
+      _logger.info('Loaded notebooks: $notebooks');
+
+      // Parse the API response structure
+      List<dynamic> mappedNotebooks = [];
+      if (notebooks.isNotEmpty && notebooks.first is Map) {
+        final firstItem = notebooks.first as Map;
+        if (firstItem.containsKey('notebooks')) {
+          mappedNotebooks = (firstItem['notebooks'] as List?) ?? [];
+        } else {
+          mappedNotebooks = notebooks;
+        }
+      } else {
+        mappedNotebooks = notebooks;
+      }
+
       Map<String, List<dynamic>> notesMap = {};
       for (final notebook in mappedNotebooks) {
-        final id = notebook['id'];
+        // Try different possible ID field names
+        final id = notebook['id'] ?? notebook['_id'] ?? notebook['notebook_id'];
         if (id != null && id is String) {
+          _logger.info('Getting notes for notebook $id');
           final notes = await _notebookService.getNotebookNotes(id);
+          _logger.info('Loaded notes for notebook $id: $notes');
           notesMap[id] = notes;
+        } else {
+          _logger.error('Notebook structure: $notebook');
         }
       }
       setState(() {
@@ -128,6 +147,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _notebookNotes = notesMap;
         _isLoading = false;
       });
+      _logger.info('Final notebooks: $_notebooks');
+      _logger.info('Final notes map: $_notebookNotes');
     } catch (e) {
       _logger.error('Failed to load notebooks or notes: $e');
       setState(() {
@@ -181,7 +202,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     Navigator.of(context)
         .pushNamed(
           '/create-note',
-          arguments: {'notebookId': _notebooks.first['id']},
+          arguments: {
+            'notebookId': _notebooks.first['id'] ?? _notebooks.first['_id'],
+          },
         )
         .then((value) {
           if (value == true) {
@@ -676,7 +699,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   Expanded(
                     child: _isSearching
                         ? _buildSearchResults()
-                        : _buildNotebooksGrid(),
+                        : _buildNotesList(),
                   ),
                 ],
               ),
@@ -818,164 +841,136 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildNotebooksGrid() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return MasonryGridView.count(
-      crossAxisCount: 2,
-      mainAxisSpacing: 16,
-      crossAxisSpacing: 16,
-      itemCount: _notebooks.length,
+  Widget _buildNotesList() {
+    // Collect all notes from all notebooks
+    List<Map<String, dynamic>> allNotes = [];
+    for (final notebook in _notebooks) {
+      final notebookId = (notebook['id'] ?? notebook['_id']) as String?;
+      if (notebookId != null) {
+        final notes = _notebookNotes[notebookId] ?? [];
+        for (final note in notes) {
+          final noteWithNotebook = Map<String, dynamic>.from(note);
+          noteWithNotebook['notebookName'] = notebook['name'];
+          noteWithNotebook['notebookId'] = notebookId;
+          allNotes.add(noteWithNotebook);
+        }
+      }
+    }
+
+    if (allNotes.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.note_outlined,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No notes yet',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Create your first note to get started',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: allNotes.length,
       itemBuilder: (context, index) {
-        final notebook = _notebooks[index];
-        final notes = _notebookNotes[notebook['id']] ?? [];
-        final notebookId = notebook['id'] as String? ?? 'unknown';
-        final colorIdx =
-            _notebookColorIndices[notebookId] ?? (index % noteColors.length);
-        final cardColor = getNotebookColor(colorIdx, isDark);
-        final textColor = getTextColor(cardColor, isDark);
-        _logger.info(
-          '[NOTEBOOK CARD] notebook: $notebook, notes: $notes, notebookId: $notebookId, colorIdx: $colorIdx, cardColor: $cardColor, textColor: $textColor',
-        );
+        final note = allNotes[index];
+        final notebookName =
+            note['notebookName'] as String? ?? 'Unknown Notebook';
+        final tags = note['tags'] as List<dynamic>? ?? [];
+
         return Card(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: cardColor, width: 2),
-          ),
-          color: cardColor,
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
+          margin: const EdgeInsets.only(bottom: 12),
+          child: ListTile(
+            contentPadding: const EdgeInsets.all(16),
+            leading: CircleAvatar(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              child: const Icon(Icons.note, color: Colors.white),
+            ),
+            title: Text(
+              note['title'] ?? 'Untitled',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 16,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.black12),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        notebook['name'] ?? 'Notebook',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.titleLarge?.copyWith(color: textColor),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                if (notes.isEmpty)
-                  Text(
-                    'No notes yet.',
-                    style: TextStyle(color: textColor.withOpacity(0.7)),
-                  ),
-                ...notes
-                    .take(3)
-                    .map(
-                      (note) => ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          note['title'] ?? '',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: textColor,
-                          ),
-                        ),
-                        subtitle: note['content'] != null
-                            ? Text(
-                                (note['content'] as String).length > 80
-                                    ? (note['content'] as String).substring(
-                                            0,
-                                            80,
-                                          ) +
-                                          '...'
-                                    : note['content'],
-                                style: TextStyle(
-                                  color: textColor.withOpacity(0.85),
-                                ),
-                              )
-                            : null,
-                        onTap: () => _openNoteDetails(note),
-                      ),
-                    ),
-                if (notes.length > 3)
-                  TextButton(
-                    onPressed: () {
-                      // TODO: Show all notes for this notebook
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Show all notes coming soon!'),
-                        ),
-                      );
-                    },
+                if (note['content'] != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
                     child: Text(
-                      'Show all notes',
-                      style: TextStyle(color: textColor),
+                      (note['content'] as String).length > 150
+                          ? '${(note['content'] as String).substring(0, 150)}...'
+                          : note['content'],
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 const SizedBox(height: 8),
-                // Bottom bar with icons
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.palette),
-                      color: textColor,
-                      tooltip: 'Change color',
-                      onPressed: () async {
-                        final newColorIdx = await showDialog<int>(
-                          context: context,
-                          builder: (context) {
-                            return AlertDialog(
-                              title: const Text('Choose color'),
-                              content: Wrap(
-                                spacing: 12,
-                                children: List.generate(noteColors.length, (
-                                  ci,
-                                ) {
-                                  final c = getNotebookColor(ci, isDark);
-                                  return GestureDetector(
-                                    onTap: () => Navigator.of(context).pop(ci),
-                                    child: Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: BoxDecoration(
-                                        color: c,
-                                        border: Border.all(
-                                          color: ci == colorIdx
-                                              ? Colors.black
-                                              : Colors.transparent,
-                                          width: 2,
-                                        ),
-                                        borderRadius: BorderRadius.circular(18),
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ),
-                            );
-                          },
-                        );
-                        if (newColorIdx != null) {
-                          setState(() {
-                            _notebookColorIndices[notebookId] = newColorIdx;
-                          });
-                        }
-                      },
+                    Icon(
+                      Icons.folder,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
-                    // Możesz dodać kolejne ikonki tutaj
+                    const SizedBox(width: 4),
+                    Text(
+                      notebookName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ],
                 ),
+                if (tags.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: tags.map((tag) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.secondary.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          tag.toString(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Theme.of(context).colorScheme.secondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
               ],
             ),
+            onTap: () => _openNoteDetails(note),
           ),
         );
       },

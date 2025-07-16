@@ -29,6 +29,8 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
   String? _selectedNotebookId;
   bool _isLoading = false;
   bool _isSaving = false;
+  List<String> _tags = [];
+  final TextEditingController _tagController = TextEditingController();
 
   @override
   void initState() {
@@ -36,6 +38,7 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
     _titleController.text = widget.noteTitle ?? '';
     _contentController.text = widget.noteContent ?? '';
     _selectedNotebookId = widget.notebookId;
+    _notebooks = [];
     _loadNotebooks();
   }
 
@@ -43,6 +46,7 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
   void dispose() {
     _titleController.dispose();
     _contentController.dispose();
+    _tagController.dispose();
     super.dispose();
   }
 
@@ -53,11 +57,68 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
 
     try {
       final notebooks = await _notebookService.getUserNotebooks();
-      final mappedNotebooks = notebooks;
-      setState(() {
-        _notebooks = mappedNotebooks;
-        _isLoading = false;
-      });
+      _logger.info('Loaded notebooks: $notebooks');
+
+      // API zwraca {notebooks: []} zamiast bezpośrednio listy
+      List<dynamic> mappedNotebooks = [];
+      if (notebooks.isNotEmpty && notebooks.first is Map) {
+        final firstItem = notebooks.first as Map;
+        if (firstItem.containsKey('notebooks')) {
+          mappedNotebooks = (firstItem['notebooks'] as List?) ?? [];
+        } else {
+          mappedNotebooks = notebooks;
+        }
+      } else {
+        mappedNotebooks = notebooks;
+      }
+
+      // Jeśli nie ma żadnych notebooków, utwórz domyślny
+      if (mappedNotebooks.isEmpty) {
+        _logger.info('No notebooks found, creating default notebook');
+        final success = await _notebookService.createNotebook(
+          name: 'Default',
+          description: 'Default notebook for your notes',
+          color: '#2196F3',
+        );
+
+        if (success) {
+          // Pobierz ponownie notebooki po utworzeniu domyślnego
+          final updatedNotebooks = await _notebookService.getUserNotebooks();
+          _logger.info(
+            'Updated notebooks after creating default: $updatedNotebooks',
+          );
+
+          // Zastosuj tę samą logikę parsowania
+          List<dynamic> updatedMappedNotebooks = [];
+          if (updatedNotebooks.isNotEmpty && updatedNotebooks.first is Map) {
+            final firstItem = updatedNotebooks.first as Map;
+            if (firstItem.containsKey('notebooks')) {
+              updatedMappedNotebooks = (firstItem['notebooks'] as List?) ?? [];
+            } else {
+              updatedMappedNotebooks = updatedNotebooks;
+            }
+          } else {
+            updatedMappedNotebooks = updatedNotebooks;
+          }
+
+          setState(() {
+            _notebooks = updatedMappedNotebooks;
+            _isLoading = false;
+          });
+          _logger.info('Default notebook created successfully');
+        } else {
+          _logger.error('Failed to create default notebook');
+          setState(() {
+            _notebooks = [];
+            _isLoading = false;
+          });
+        }
+      } else {
+        setState(() {
+          _notebooks = mappedNotebooks;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       _logger.error('Failed to load notebooks: $e');
       setState(() {
@@ -71,14 +132,105 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
       return;
     }
 
+    // Jeśli nie ma wybranego notebooka, utwórz domyślny "Untitled"
     if (_selectedNotebookId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a notebook'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
+      setState(() {
+        _isSaving = true;
+      });
+
+      try {
+        _logger.info(
+          'No notebook selected, creating default "Untitled" notebook',
+        );
+        final success = await _notebookService.createNotebook(
+          name: 'Untitled',
+          description: 'Default notebook for notes',
+          color: '#9C27B0',
+        );
+
+        if (success) {
+          // Pobierz utworzony notebook i ustaw go jako wybrany
+          final notebooks = await _notebookService.getUserNotebooks();
+          _logger.info('Retrieved notebooks after creation: $notebooks');
+          _logger.info('Notebooks type: ${notebooks.runtimeType}');
+          _logger.info('Notebooks length: ${notebooks.length}');
+
+          // Parsuj strukturę danych z API
+          List<dynamic> mappedNotebooks = [];
+          if (notebooks.isNotEmpty && notebooks.first is Map) {
+            final firstItem = notebooks.first as Map;
+            _logger.info('First item keys: ${firstItem.keys.toList()}');
+            if (firstItem.containsKey('notebooks')) {
+              mappedNotebooks = (firstItem['notebooks'] as List?) ?? [];
+              _logger.info(
+                'Extracted notebooks from firstItem: $mappedNotebooks',
+              );
+            } else {
+              mappedNotebooks = notebooks;
+              _logger.info('Using notebooks directly: $mappedNotebooks');
+            }
+          } else {
+            mappedNotebooks = notebooks;
+            _logger.info(
+              'Using notebooks directly (not Map): $mappedNotebooks',
+            );
+          }
+
+          _logger.info(
+            'Final mappedNotebooks length: ${mappedNotebooks.length}',
+          );
+
+          if (mappedNotebooks.isNotEmpty) {
+            // Znajdź notebook "Untitled" lub weź pierwszy
+            final untitledNotebook = mappedNotebooks.firstWhere(
+              (notebook) => (notebook['name'] as String?) == 'Untitled',
+              orElse: () => mappedNotebooks.first,
+            );
+            _logger.info('Selected notebook: $untitledNotebook');
+
+            // Sprawdź różne możliwe pola ID
+            final notebookId =
+                untitledNotebook['id'] ??
+                untitledNotebook['_id'] ??
+                untitledNotebook['notebook_id'];
+            _logger.info('Notebook ID found: $notebookId');
+
+            if (notebookId != null && notebookId is String) {
+              _selectedNotebookId = notebookId;
+              _logger.info(
+                'Default notebook created and selected: $notebookId',
+              );
+            } else {
+              _logger.error('Notebook structure: $untitledNotebook');
+              throw Exception(
+                'Failed to get notebook ID - ID is null or not a string',
+              );
+            }
+          } else {
+            _logger.error('No notebooks found in mappedNotebooks');
+            throw Exception(
+              'Failed to create default notebook - no notebooks returned',
+            );
+          }
+        } else {
+          _logger.error('createNotebook returned false');
+          throw Exception(
+            'Failed to create default notebook - API returned false',
+          );
+        }
+      } catch (e) {
+        _logger.error('Failed to create default notebook: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to create default notebook: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() {
+          _isSaving = false;
+        });
+        return;
+      }
     }
 
     setState(() {
@@ -90,6 +242,7 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
         notebookId: _selectedNotebookId!,
         title: _titleController.text.trim(),
         content: _contentController.text.trim(),
+        tags: _tags,
       );
 
       if (success) {
@@ -120,6 +273,56 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
         _isSaving = false;
       });
     }
+  }
+
+  Widget _buildTagInput() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          children: _tags
+              .map(
+                (tag) => Chip(
+                  label: Text(tag),
+                  onDeleted: () {
+                    setState(() {
+                      _tags.remove(tag);
+                    });
+                  },
+                ),
+              )
+              .toList(),
+        ),
+        TextField(
+          controller: _tagController,
+          decoration: InputDecoration(
+            labelText: 'Add tag',
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.add),
+              onPressed: () {
+                final tag = _tagController.text.trim();
+                if (tag.isNotEmpty && !_tags.contains(tag)) {
+                  setState(() {
+                    _tags.add(tag);
+                  });
+                  _tagController.clear();
+                }
+              },
+            ),
+          ),
+          onSubmitted: (tag) {
+            tag = tag.trim();
+            if (tag.isNotEmpty && !_tags.contains(tag)) {
+              setState(() {
+                _tags.add(tag);
+              });
+              _tagController.clear();
+            }
+          },
+        ),
+      ],
+    );
   }
 
   @override
@@ -198,22 +401,35 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
                                 width: 16,
                                 height: 16,
                                 decoration: BoxDecoration(
-                                  color: Color(
-                                    int.parse(
-                                      ((notebook['color'] as String?) ??
-                                              '#2196F3')
-                                          .replaceAll('#', '0xFF'),
-                                    ),
-                                  ),
+                                  color: (() {
+                                    final colorValue = notebook['color'];
+                                    if (colorValue is String &&
+                                        colorValue.isNotEmpty) {
+                                      try {
+                                        return Color(
+                                          int.parse(
+                                            colorValue.replaceAll('#', '0xFF'),
+                                          ),
+                                        );
+                                      } catch (_) {
+                                        return const Color(0xFF2196F3);
+                                      }
+                                    }
+                                    return const Color(0xFF2196F3);
+                                  })(),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              title: Text(notebook['name'] as String),
-                              trailing: _selectedNotebookId == notebook['id']
+                              title: Text(
+                                (notebook['name'] as String?) ?? 'Untitled',
+                              ),
+                              trailing:
+                                  _selectedNotebookId ==
+                                      (notebook['id'] ?? notebook['_id'])
                                   ? const Icon(Icons.check, color: Colors.green)
                                   : null,
                               onTap: () {
-                                final id = notebook['id'];
+                                final id = notebook['id'] ?? notebook['_id'];
                                 if (id != null && id is String) {
                                   setState(() {
                                     _selectedNotebookId = id;
@@ -233,6 +449,8 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
+                    _buildTagInput(),
+                    const SizedBox(height: 16),
                     // Title field
                     TextFormField(
                       controller: _titleController,

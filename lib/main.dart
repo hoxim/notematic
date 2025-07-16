@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'src/services/token_service.dart';
 import 'src/services/logger_service.dart';
+import 'src/services/api_service.dart';
 import 'src/screens/home_screen.dart';
 import 'src/screens/create_note_screen.dart';
 import 'src/config/app_config.dart';
@@ -18,6 +19,11 @@ Future<void> main() async {
   logger.init();
   logger.info('Starting Notematic Flutter app');
   AppConfig.logConfiguration();
+
+  // Initialize API service to load saved tokens
+  final apiService = ApiService();
+  await apiService.initialize();
+  logger.info('API service initialized');
 
   logger.info('About to run app');
   runApp(const MyApp());
@@ -50,12 +56,12 @@ class _MyAppState extends State<MyApp> {
       title: 'Notematic',
       theme: ThemeData(
         brightness: Brightness.light,
-        primarySwatch: Colors.blue,
+        primarySwatch: Colors.pink,
         useMaterial3: true,
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
-        primarySwatch: Colors.blue,
+        primarySwatch: Colors.blueGrey,
         useMaterial3: true,
       ),
       themeMode: _themeMode,

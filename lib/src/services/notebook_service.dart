@@ -30,11 +30,13 @@ class NotebookService {
     required String notebookId,
     required String title,
     required String content,
+    List<String>? tags,
   }) async {
     return await _api.createNote(
       notebookId: notebookId,
       title: title,
       content: content,
+      tags: tags,
     );
   }
 
