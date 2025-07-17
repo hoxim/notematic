@@ -28,13 +28,15 @@ class Notebook {
   };
 
   static Notebook fromMap(Map<String, dynamic> map) => Notebook(
-    id: map['id'] ?? '',
+    id: map['id'] ?? map['_id'] ?? '',
     name: map['name'] ?? '',
     description: map['description'],
     color: map['color'],
     updatedAt: map['updatedAt'] != null
         ? DateTime.parse(map['updatedAt'])
-        : DateTime.now(),
+        : (map['created_at'] != null
+              ? DateTime.parse(map['created_at'])
+              : DateTime.now()),
     deleted: map['deleted'] ?? false,
     isDirty: map['isDirty'] ?? false,
   );
