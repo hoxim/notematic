@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart';
-import '../services/logger_service.dart';
+import '../services/api_service.dart';
 import '../config/env_config.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -16,7 +15,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
-  final _logger = LoggerService();
+  final ApiService _apiService = ApiService();
 
   // API status
   String _apiStatus = 'checking';
@@ -46,35 +45,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  Future<void> _register() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _register(String email, String password) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
-    try {
-      final success = await AuthService().register(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-      if (success) {
-        if (mounted) {
-          Navigator.of(context).pushReplacementNamed('/login');
-        }
-      } else {
-        setState(() {
-          _errorMessage = 'Registration failed';
-        });
+    final success = await _apiService.register(
+      email: email,
+      password: password,
+    );
+    if (success) {
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/login');
       }
-    } catch (e) {
+    } else {
       setState(() {
-        _errorMessage = 'Registration failed: $e';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
+        _errorMessage = 'Registration failed. Try again.';
       });
     }
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   // Google login temporarily disabled.
@@ -140,7 +131,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       }
                       return null;
                     },
-                    onFieldSubmitted: (_) => _register(),
+                    onFieldSubmitted: (_) => _register(
+                      _emailController.text,
+                      _passwordController.text,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   if (_errorMessage != null)
@@ -154,7 +148,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _register,
+                      onPressed: _isLoading
+                          ? null
+                          : () => _register(
+                              _emailController.text,
+                              _passwordController.text,
+                            ),
                       child: _isLoading
                           ? const CircularProgressIndicator()
                           : const Text('Register'),

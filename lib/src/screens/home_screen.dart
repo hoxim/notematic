@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
-import '../services/token_service.dart';
-import '../services/logger_service.dart';
-import '../services/notebook_service.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import '../services/note_service_factory.dart';
+import '../services/notebook_service_factory.dart';
+import '../models/note.dart';
+import '../services/logger_service.dart';
+import '../services/token_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 const noteColors = [
   // Each entry: {'light': Color, 'dark': Color}
@@ -42,13 +45,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String? _userEmail;
-  final _logger = LoggerService();
-  final _notebookService = NotebookService();
   bool _defaultNotebookChecked = false; // Prevents multiple creations
   List<dynamic> _notebooks = [];
   Map<String, List<dynamic>> _notebookNotes = {};
   bool _isLoading = true;
   Map<String, int> _notebookColorIndices = {}; // notebookId -> color index
+  bool isSyncEnabled = true; // globalna flaga synchronizacji
 
   // FAB animation
   late AnimationController _fabAnimationController;
@@ -68,6 +70,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _aboutLoading = false;
   String? _aboutError;
 
+  dynamic _noteService;
+  dynamic _notebookService;
+  List<Note> _notes = [];
+  final LoggerService _logger = LoggerService();
+
   @override
   void initState() {
     super.initState();
@@ -79,7 +86,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       parent: _fabAnimationController,
       curve: Curves.easeInOut,
     );
-    _loadUserInfo();
+    _initServices();
+    _loadSyncFlag();
+  }
+
+  Future<void> _initServices() async {
+    _noteService = await getNoteService();
+    _notebookService = await getNotebookService();
+    await _loadUserInfo();
   }
 
   @override
@@ -91,12 +105,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _loadUserInfo() async {
     try {
-      final userEmail = await TokenService.getUserId();
+      final userEmail = await TokenService().getUserId();
       if (userEmail != null) {
         setState(() {
           _userEmail = userEmail;
         });
-        _logger.info('User loaded: $_userEmail');
+        _logger.info('User loaded:  [38;5;2m$_userEmail [0m');
         if (!_defaultNotebookChecked) {
           _defaultNotebookChecked = true;
           await _notebookService.createDefaultNotebookIfNeeded();
@@ -132,10 +146,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       Map<String, List<dynamic>> notesMap = {};
       for (final notebook in mappedNotebooks) {
         // Try different possible ID field names
-        final id = notebook['id'] ?? notebook['_id'] ?? notebook['notebook_id'];
+        final id =
+            notebook['id'] ??
+            notebook['_id'] ??
+            notebook['notebook_id'] ??
+            notebook['uuid'];
         if (id != null && id is String) {
           _logger.info('Getting notes for notebook $id');
-          final notes = await _notebookService.getNotebookNotes(id);
+          final notes = await _noteService.getNotesForNotebook(id);
           _logger.info('Loaded notes for notebook $id: $notes');
           notesMap[id] = notes;
         } else {
@@ -312,31 +330,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
                     Navigator.of(context).pop();
 
-                    final success = await _notebookService.createNotebook(
-                      name: nameController.text.trim(),
+                    await _notebookService.createNotebook(
+                      nameController.text.trim(),
                       description: descriptionController.text.trim().isEmpty
                           ? null
                           : descriptionController.text.trim(),
                       color: selectedColor,
                     );
 
-                    if (success) {
-                      _logger.info('Notebook created successfully');
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Notebook created successfully!'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                      await _loadNotebooksAndNotes();
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Failed to create notebook'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
+                    _logger.info('Notebook created successfully');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Notebook created successfully!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                    await _loadNotebooksAndNotes();
                   },
                   child: const Text('Create'),
                 ),
@@ -423,7 +432,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     if (shouldLogout != true) return;
 
     try {
-      await TokenService.clearTokens();
+      await TokenService().clearToken();
       _logger.info('User logged out');
 
       if (mounted) {
@@ -516,6 +525,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  Future<void> _loadSyncFlag() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      isSyncEnabled = prefs.getBool('isSyncEnabled') ?? true;
+    });
+  }
+
+  Future<void> _setSyncFlag(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isSyncEnabled', value);
+    setState(() {
+      isSyncEnabled = value;
+    });
+  }
+
+  Future<void> _syncIfNeeded() async {
+    if (!kIsWeb &&
+        isSyncEnabled &&
+        _noteService != null &&
+        _notebookService != null) {
+      try {
+        await _noteService.syncWithApi();
+        await _notebookService.syncWithApi();
+        await _loadNotebooksAndNotes();
+      } catch (e) {
+        _logger.error('Sync failed: $e');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -524,6 +563,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         title: const Text('Notematic'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          Row(
+            children: [
+              const Text('Sync'),
+              Switch(
+                value: isSyncEnabled,
+                onChanged: (val) {
+                  _setSyncFlag(val);
+                },
+              ),
+            ],
+          ),
           IconButton(
             onPressed: widget.onToggleTheme,
             icon: widget.themeMode == ThemeMode.dark

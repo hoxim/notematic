@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart';
-import '../services/logger_service.dart';
+import '../services/api_service.dart';
 import '../config/env_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/token_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -17,7 +17,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
-  final _logger = LoggerService();
+  final ApiService _apiService = ApiService();
 
   // API status
   String _apiStatus = 'checking';
@@ -56,7 +56,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     if (autoLogin) {
       // Try auto-login if tokens are present
-      final isLoggedIn = await AuthService().isLoggedIn();
+      final isLoggedIn = await TokenService().isLoggedIn();
       if (isLoggedIn && mounted) {
         Navigator.of(context).pushReplacementNamed('/home');
       }
@@ -71,42 +71,25 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
-  Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> login(String email, String password) async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
-    try {
-      final success = await AuthService().login(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-      if (success) {
-        if (_autoLogin) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('autoLogin', true);
-        } else {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('autoLogin', false);
-        }
-        if (mounted) {
-          Navigator.of(context).pushReplacementNamed('/home');
-        }
-      } else {
-        setState(() {
-          _errorMessage = 'Invalid email or password';
-        });
+    final success = await _apiService.login(email: email, password: password);
+    if (success) {
+      await TokenService().saveUserEmail(email);
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/home');
       }
-    } catch (e) {
+    } else {
       setState(() {
-        _errorMessage = 'Login failed: $e';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
+        _errorMessage = 'Login failed. Check your credentials.';
       });
     }
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   // Google login temporarily disabled.
@@ -177,7 +160,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         textInputAction: TextInputAction.done,
                         validator: (v) =>
                             v == null || v.isEmpty ? 'Enter password' : null,
-                        onFieldSubmitted: (_) => _login(),
+                        onFieldSubmitted: (_) => login(
+                          _emailController.text,
+                          _passwordController.text,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       Row(
@@ -194,7 +180,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
-                          onPressed: _isLoading ? null : _login,
+                          onPressed: _isLoading
+                              ? null
+                              : () => login(
+                                  _emailController.text,
+                                  _passwordController.text,
+                                ),
                           child: _isLoading
                               ? const SizedBox(
                                   height: 20,

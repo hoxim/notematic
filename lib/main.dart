@@ -25,10 +25,23 @@ Future<void> main() async {
   await apiService.initialize();
   logger.info('API service initialized');
 
+  // Set up global forced logout handler (401)
+  apiService.onForceLogout = () {
+    logger.warning(
+      'Global forced logout triggered (401). Navigating to login.',
+    );
+    navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      '/login',
+      (route) => false,
+    );
+  };
+
   logger.info('About to run app');
   runApp(const MyApp());
   logger.info('App started');
 }
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
@@ -54,6 +67,7 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Notematic',
+      navigatorKey: navigatorKey,
       theme: ThemeData(
         brightness: Brightness.light,
         primarySwatch: Colors.pink,
@@ -61,7 +75,18 @@ class _MyAppState extends State<MyApp> {
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
-        primarySwatch: Colors.blueGrey,
+        primarySwatch: MaterialColor(0xFF212121, <int, Color>{
+          50: Color(0xFF212121),
+          100: Color(0xFF212121),
+          200: Color(0xFF212121),
+          300: Color(0xFF212121),
+          400: Color(0xFF212121),
+          500: Color(0xFF212121),
+          600: Color(0xFF212121),
+          700: Color(0xFF212121),
+          800: Color(0xFF212121),
+          900: Color(0xFF000000),
+        }),
         useMaterial3: true,
       ),
       themeMode: _themeMode,
@@ -104,7 +129,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   Future<void> _checkAuthStatus() async {
     _logger.info('Starting auth check...');
     try {
-      final isLoggedIn = await TokenService.isLoggedIn();
+      final isLoggedIn = await TokenService().isLoggedIn();
       _logger.info('Auth check result: $isLoggedIn');
 
       setState(() {

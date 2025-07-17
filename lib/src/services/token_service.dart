@@ -1,15 +1,47 @@
-import 'api_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-/// TokenService is a thin static wrapper for HTTP API session/token functions.
+/// TokenService for managing JWT tokens in SharedPreferences
 class TokenService {
-  static final ApiService _api = ApiService();
+  static const _tokenKey = 'auth_token';
+  static const _userEmailKey = 'user_email';
 
-  /// Returns true if the user is logged in (calls ApiService)
-  static Future<bool> isLoggedIn() async => await _api.isLoggedIn();
+  /// Saves the token
+  Future<void> saveToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tokenKey, token);
+  }
 
-  /// Logs out the user (clears tokens from memory)
-  static Future<void> clearTokens() async => _api.logout();
+  /// Retrieves the token
+  Future<String?> getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_tokenKey);
+  }
 
-  /// Gets the user id from the current session (JWT sub)
-  static Future<String?> getUserId() async => _api.getUserId();
+  /// Removes the token
+  Future<void> clearToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_tokenKey);
+    await prefs.remove(_userEmailKey);
+  }
+
+  /// Checks if token exists
+  Future<bool> hasToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.containsKey(_tokenKey);
+  }
+
+  Future<bool> isLoggedIn() async {
+    final token = await getToken();
+    return token != null && token.isNotEmpty;
+  }
+
+  Future<void> saveUserEmail(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userEmailKey, email);
+  }
+
+  Future<String?> getUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_userEmailKey);
+  }
 }

@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
-import '../services/notebook_service.dart';
+import '../services/note_service_factory.dart';
+import '../services/notebook_service_factory.dart';
+import '../models/note.dart';
+import '../models/notebook.dart';
 import '../services/logger_service.dart';
+import '../services/interfaces/note_service_interface.dart';
+import '../services/interfaces/notebook_service_interface.dart';
 
 class CreateNoteScreen extends StatefulWidget {
   final String? notebookId;
@@ -22,8 +27,9 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
-  final _notebookService = NotebookService();
+  late final INotebookService<Notebook> _notebookService;
   final _logger = LoggerService();
+  late final INoteService<Note> _noteService;
 
   List<dynamic> _notebooks = [];
   String? _selectedNotebookId;
@@ -39,7 +45,7 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
     _contentController.text = widget.noteContent ?? '';
     _selectedNotebookId = widget.notebookId;
     _notebooks = [];
-    _loadNotebooks();
+    _initServices();
   }
 
   @override
@@ -48,6 +54,12 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
     _contentController.dispose();
     _tagController.dispose();
     super.dispose();
+  }
+
+  Future<void> _initServices() async {
+    _noteService = await getNoteService();
+    _notebookService = await getNotebookService();
+    _loadNotebooks();
   }
 
   Future<void> _loadNotebooks() async {
@@ -75,44 +87,9 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
       // Jeśli nie ma żadnych notebooków, utwórz domyślny
       if (mappedNotebooks.isEmpty) {
         _logger.info('No notebooks found, creating default notebook');
-        final success = await _notebookService.createNotebook(
-          name: 'Default',
-          description: 'Default notebook for your notes',
-          color: '#2196F3',
-        );
-
-        if (success) {
-          // Pobierz ponownie notebooki po utworzeniu domyślnego
-          final updatedNotebooks = await _notebookService.getUserNotebooks();
-          _logger.info(
-            'Updated notebooks after creating default: $updatedNotebooks',
-          );
-
-          // Zastosuj tę samą logikę parsowania
-          List<dynamic> updatedMappedNotebooks = [];
-          if (updatedNotebooks.isNotEmpty && updatedNotebooks.first is Map) {
-            final firstItem = updatedNotebooks.first as Map;
-            if (firstItem.containsKey('notebooks')) {
-              updatedMappedNotebooks = (firstItem['notebooks'] as List?) ?? [];
-            } else {
-              updatedMappedNotebooks = updatedNotebooks;
-            }
-          } else {
-            updatedMappedNotebooks = updatedNotebooks;
-          }
-
-          setState(() {
-            _notebooks = updatedMappedNotebooks;
-            _isLoading = false;
-          });
-          _logger.info('Default notebook created successfully');
-        } else {
-          _logger.error('Failed to create default notebook');
-          setState(() {
-            _notebooks = [];
-            _isLoading = false;
-          });
-        }
+        await _notebookService.createNotebook('Default');
+        _logger.info('Default notebook created');
+        // Możesz dodać dodatkowe akcje, np. odświeżenie listy
       } else {
         setState(() {
           _notebooks = mappedNotebooks;
@@ -142,80 +119,67 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
         _logger.info(
           'No notebook selected, creating default "Untitled" notebook',
         );
-        final success = await _notebookService.createNotebook(
-          name: 'Untitled',
+        await _notebookService.createNotebook(
+          'Untitled',
           description: 'Default notebook for notes',
           color: '#9C27B0',
         );
 
-        if (success) {
-          // Pobierz utworzony notebook i ustaw go jako wybrany
-          final notebooks = await _notebookService.getUserNotebooks();
-          _logger.info('Retrieved notebooks after creation: $notebooks');
-          _logger.info('Notebooks type: ${notebooks.runtimeType}');
-          _logger.info('Notebooks length: ${notebooks.length}');
+        // Pobierz utworzony notebook i ustaw go jako wybrany
+        final notebooks = await _notebookService.getUserNotebooks();
+        _logger.info('Retrieved notebooks after creation: $notebooks');
+        _logger.info('Notebooks type: ${notebooks.runtimeType}');
+        _logger.info('Notebooks length: ${notebooks.length}');
 
-          // Parsuj strukturę danych z API
-          List<dynamic> mappedNotebooks = [];
-          if (notebooks.isNotEmpty && notebooks.first is Map) {
-            final firstItem = notebooks.first as Map;
-            _logger.info('First item keys: ${firstItem.keys.toList()}');
-            if (firstItem.containsKey('notebooks')) {
-              mappedNotebooks = (firstItem['notebooks'] as List?) ?? [];
-              _logger.info(
-                'Extracted notebooks from firstItem: $mappedNotebooks',
-              );
-            } else {
-              mappedNotebooks = notebooks;
-              _logger.info('Using notebooks directly: $mappedNotebooks');
-            }
+        // Parsuj strukturę danych z API
+        List<dynamic> mappedNotebooks = [];
+        if (notebooks.isNotEmpty && notebooks.first is Map) {
+          final firstItem = notebooks.first as Map;
+          _logger.info('First item keys: ${firstItem.keys.toList()}');
+          if (firstItem.containsKey('notebooks')) {
+            mappedNotebooks = (firstItem['notebooks'] as List?) ?? [];
+            _logger.info(
+              'Extracted notebooks from firstItem: $mappedNotebooks',
+            );
           } else {
             mappedNotebooks = notebooks;
-            _logger.info(
-              'Using notebooks directly (not Map): $mappedNotebooks',
-            );
+            _logger.info('Using notebooks directly: $mappedNotebooks');
           }
+        } else {
+          mappedNotebooks = notebooks;
+          _logger.info('Using notebooks directly (not Map): $mappedNotebooks');
+        }
 
-          _logger.info(
-            'Final mappedNotebooks length: ${mappedNotebooks.length}',
+        _logger.info('Final mappedNotebooks length: ${mappedNotebooks.length}');
+
+        if (mappedNotebooks.isNotEmpty) {
+          // Znajdź notebook "Untitled" lub weź pierwszy
+          final untitledNotebook = mappedNotebooks.firstWhere(
+            (notebook) => (notebook['name'] as String?) == 'Untitled',
+            orElse: () => mappedNotebooks.first,
           );
+          _logger.info('Selected notebook: $untitledNotebook');
 
-          if (mappedNotebooks.isNotEmpty) {
-            // Znajdź notebook "Untitled" lub weź pierwszy
-            final untitledNotebook = mappedNotebooks.firstWhere(
-              (notebook) => (notebook['name'] as String?) == 'Untitled',
-              orElse: () => mappedNotebooks.first,
-            );
-            _logger.info('Selected notebook: $untitledNotebook');
+          // Sprawdź różne możliwe pola ID
+          final notebookId =
+              untitledNotebook['id'] ??
+              untitledNotebook['_id'] ??
+              untitledNotebook['notebook_id'];
+          _logger.info('Notebook ID found: $notebookId');
 
-            // Sprawdź różne możliwe pola ID
-            final notebookId =
-                untitledNotebook['id'] ??
-                untitledNotebook['_id'] ??
-                untitledNotebook['notebook_id'];
-            _logger.info('Notebook ID found: $notebookId');
-
-            if (notebookId != null && notebookId is String) {
-              _selectedNotebookId = notebookId;
-              _logger.info(
-                'Default notebook created and selected: $notebookId',
-              );
-            } else {
-              _logger.error('Notebook structure: $untitledNotebook');
-              throw Exception(
-                'Failed to get notebook ID - ID is null or not a string',
-              );
-            }
+          if (notebookId != null && notebookId is String) {
+            _selectedNotebookId = notebookId;
+            _logger.info('Default notebook created and selected: $notebookId');
           } else {
-            _logger.error('No notebooks found in mappedNotebooks');
+            _logger.error('Notebook structure: $untitledNotebook');
             throw Exception(
-              'Failed to create default notebook - no notebooks returned',
+              'Failed to get notebook ID - ID is null or not a string',
             );
           }
         } else {
-          _logger.error('createNotebook returned false');
+          _logger.error('No notebooks found in mappedNotebooks');
           throw Exception(
-            'Failed to create default notebook - API returned false',
+            'Failed to create default notebook - no notebooks returned',
           );
         }
       } catch (e) {
@@ -238,27 +202,25 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
     });
 
     try {
-      final success = await _notebookService.createNote(
-        notebookId: _selectedNotebookId!,
+      final note = Note(
+        id: UniqueKey().toString(),
         title: _titleController.text.trim(),
         content: _contentController.text.trim(),
-        tags: _tags,
+        updatedAt: DateTime.now(),
+        notebookUuid: _selectedNotebookId!,
+      );
+      await _noteService.upsertNote(note);
+
+      _logger.info('Note created successfully');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Note saved successfully!'),
+          backgroundColor: Colors.green,
+        ),
       );
 
-      if (success) {
-        _logger.info('Note created successfully');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Note saved successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-
-        if (mounted) {
-          Navigator.of(context).pop(true); // Return true to indicate success
-        }
-      } else {
-        throw Exception('Failed to save note');
+      if (mounted) {
+        Navigator.of(context).pop(true); // Return true to indicate success
       }
     } catch (e) {
       _logger.error('Failed to save note: $e');
