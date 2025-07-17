@@ -108,6 +108,9 @@ class ApiService {
         final data = jsonDecode(response.body);
         await setToken(data['access_token']);
         logger.info('Login successful for email: $email');
+        logger.info(
+          'JWT access_token: ${data['access_token']}',
+        ); // Dodaj logowanie tokena
         return true;
       } else {
         logger.warning(
