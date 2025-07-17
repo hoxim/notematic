@@ -14,14 +14,14 @@ class NotebookServiceApi implements INotebookService<Notebook> {
   }) async {
     // TODO: Implement API call to create notebook
     await _api.post(
-      '/notebooks',
+      '/protected/notebooks',
       body: {'name': name, 'description': description, 'color': color},
     );
   }
 
   @override
   Future<List<Notebook>> getUserNotebooks() async {
-    final response = await _api.get('/notebooks');
+    final response = await _api.get('/protected/notebooks');
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       if (data is Map<String, dynamic> && data.containsKey('notebooks')) {
@@ -40,7 +40,7 @@ class NotebookServiceApi implements INotebookService<Notebook> {
   @override
   Future<void> deleteNotebook(String uuid) async {
     // TODO: Implement API call to delete notebook
-    await _api.post('/notebooks/$uuid/delete');
+    await _api.post('/protected/notebooks/$uuid/delete');
   }
 
   @override

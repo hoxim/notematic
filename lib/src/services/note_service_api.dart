@@ -32,7 +32,7 @@ class NoteServiceApi implements INoteService<Note> {
 
   @override
   Future<List<Note>> getNotesForNotebook(String notebookUuid) async {
-    final response = await _api.get('/notebooks/$notebookUuid/notes');
+    final response = await _api.get('/protected/notebooks/$notebookUuid/notes');
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       if (data is Map<String, dynamic> && data.containsKey('notes')) {
