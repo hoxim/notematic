@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import '../services/note_service_factory.dart';
 import '../services/notebook_service_factory.dart';
-import '../models/note.dart';
 import '../services/logger_service.dart';
 import '../services/token_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import '../components/user_profile_menu.dart';
+import '../components/notebook_dialog.dart';
+import '../components/app_about_dialog.dart';
 
 const noteColors = [
   // Each entry: {'light': Color, 'dark': Color}
@@ -49,7 +49,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   List<dynamic> _notebooks = [];
   Map<String, List<dynamic>> _notebookNotes = {};
   bool _isLoading = true;
-  Map<String, int> _notebookColorIndices = {}; // notebookId -> color index
   bool isSyncEnabled = true; // globalna flaga synchronizacji
 
   // FAB animation
@@ -64,15 +63,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _isSearching = false;
 
   // About dialog state
-  String? _clientVersion;
-  String? _apiVersion;
-  String? _dbStatus;
-  bool _aboutLoading = false;
-  String? _aboutError;
+
 
   dynamic _noteService;
   dynamic _notebookService;
-  List<Note> _notes = [];
   final LoggerService _logger = LoggerService();
 
   @override
@@ -183,16 +177,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _addNoteForNotebook(String notebookId) {
-    Navigator.of(context)
-        .pushNamed('/create-note', arguments: {'notebookId': notebookId})
-        .then((value) {
-          if (value == true) {
-            _loadNotebooksAndNotes();
-          }
-        });
-  }
-
   void _openNoteDetails(Map<String, dynamic> note) {
     // Placeholder: show snackbar
     ScaffoldMessenger.of(
@@ -245,120 +229,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   void _showCreateNotebookDialog() {
-    final nameController = TextEditingController();
-    final descriptionController = TextEditingController();
-    String selectedColor = '#2196F3'; // Default blue
-
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Create New Notebook'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Notebook Name',
-                        border: OutlineInputBorder(),
-                        hintText: 'Enter notebook name...',
-                      ),
-                      autofocus: true,
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: descriptionController,
-                      decoration: const InputDecoration(
-                        labelText: 'Description (optional)',
-                        border: OutlineInputBorder(),
-                        hintText: 'Enter description...',
-                      ),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('Choose color:'),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      children: noteColors.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final colors = entry.value;
-                        final isDark =
-                            Theme.of(context).brightness == Brightness.dark;
-                        final color = getNotebookColor(index, isDark);
-                        final hexColor =
-                            '#${color.value.toRadixString(16).substring(2)}';
-
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              selectedColor = hexColor;
-                            });
-                          },
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: color,
-                              border: Border.all(
-                                color: selectedColor == hexColor
-                                    ? Colors.black
-                                    : Colors.transparent,
-                                width: 2,
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (nameController.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Please enter a notebook name'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                      return;
-                    }
-
-                    Navigator.of(context).pop();
-
-                    await _notebookService.createNotebook(
-                      nameController.text.trim(),
-                      description: descriptionController.text.trim().isEmpty
-                          ? null
-                          : descriptionController.text.trim(),
-                      color: selectedColor,
-                    );
-
-                    _logger.info('Notebook created successfully');
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Notebook created successfully!'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                    await _loadNotebooksAndNotes();
-                  },
-                  child: const Text('Create'),
-                ),
-              ],
+        return NotebookDialog(
+          onCreate: (name, description, color) async {
+            await _notebookService.createNotebook(
+              name,
+              description: description,
+              color: color,
             );
+
+            _logger.info('Notebook created successfully');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Notebook created successfully!'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            }
+            await _loadNotebooksAndNotes();
           },
         );
       },
@@ -480,69 +371,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Future<void> _showAboutDialog() async {
-    setState(() {
-      _aboutLoading = true;
-      _aboutError = null;
-    });
-    String? clientVersion;
-    String? apiVersion;
-    String? dbStatus;
-    try {
-      // Get client version
-      final info = await PackageInfo.fromPlatform();
-      clientVersion = info.version;
-      // Get API health
-      // Usuń powyższe linie i ewentualnie zastąp je TODO: implement health-check przez HTTP lub usuń sekcję sprawdzania API.
-      apiVersion = 'Unknown';
-      dbStatus = 'Connected';
-    } catch (e) {
-      setState(() {
-        _aboutLoading = false;
-        _aboutError = 'Failed to load info: $e';
-      });
-      return showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('About'),
-          content: Text(_aboutError ?? 'Unknown error'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
-    }
-    setState(() {
-      _aboutLoading = false;
-      _clientVersion = clientVersion;
-      _apiVersion = apiVersion;
-      _dbStatus = dbStatus;
-    });
+  void _showAboutDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('About'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Client version: ${_clientVersion ?? '-'}'),
-            const SizedBox(height: 8),
-            Text('API version: ${_apiVersion ?? '-'}'),
-            const SizedBox(height: 8),
-            Text('Database status: ${_dbStatus ?? '-'}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
+      builder: (BuildContext context) => const AppAboutDialog(),
     );
   }
 
@@ -561,24 +393,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
-  Future<void> _syncIfNeeded() async {
-    if (!kIsWeb &&
-        isSyncEnabled &&
-        _noteService != null &&
-        _notebookService != null) {
-      try {
-        await _noteService.syncWithApi();
-        await _notebookService.syncWithApi();
-        await _loadNotebooksAndNotes();
-      } catch (e) {
-        _logger.error('Sync failed: $e');
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notematic'),
@@ -605,123 +421,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 : 'Dark mode',
           ),
           // User profile menu
-          PopupMenuButton<String>(
-            offset: const Offset(0, 50),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // User avatar
-                  CircleAvatar(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    child: Text(
-                      _userEmail != null && _userEmail!.isNotEmpty
-                          ? _userEmail![0].toUpperCase()
-                          : 'U',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // Username (hidden on small screens)
-                  if (MediaQuery.of(context).size.width > 400)
-                    Text(
-                      _userEmail ?? 'User',
-                      style: const TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.arrow_drop_down),
-                ],
-              ),
-            ),
-            itemBuilder: (BuildContext context) => [
-              // User info header
-              PopupMenuItem<String>(
-                enabled: false,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _userEmail ?? 'User',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    Text(
-                      'Signed in',
-                      style: TextStyle(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withOpacity(0.6),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(),
-              PopupMenuItem<String>(
-                value: 'profile',
-                child: Row(
-                  children: [
-                    const Icon(Icons.person, size: 20),
-                    const SizedBox(width: 12),
-                    const Text('Profile'),
-                  ],
-                ),
-              ),
-              PopupMenuItem<String>(
-                value: 'settings',
-                child: Row(
-                  children: [
-                    const Icon(Icons.settings, size: 20),
-                    const SizedBox(width: 12),
-                    const Text('Settings'),
-                  ],
-                ),
-              ),
-              PopupMenuItem<String>(
-                value: 'about',
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline, size: 20),
-                    const SizedBox(width: 12),
-                    const Text('About'),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(),
-              PopupMenuItem<String>(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    const Icon(Icons.logout, size: 20, color: Colors.red),
-                    const SizedBox(width: 12),
-                    const Text('Logout', style: TextStyle(color: Colors.red)),
-                  ],
-                ),
-              ),
-            ],
-            onSelected: (String value) {
-              switch (value) {
-                case 'profile':
-                  _showProfile();
-                  break;
-                case 'settings':
-                  _showSettings();
-                  break;
-                case 'about':
-                  _showAboutDialog();
-                  break;
-                case 'logout':
-                  _logout();
-                  break;
-              }
-            },
+          UserProfileMenu(
+            userEmail: _userEmail,
+            onProfileTap: _showProfile,
+            onSettingsTap: _showSettings,
+            onAboutTap: _showAboutDialog,
+            onLogoutTap: _logout,
           ),
         ],
       ),
