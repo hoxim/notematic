@@ -145,12 +145,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       Map<String, List<dynamic>> notesMap = {};
       for (final notebook in mappedNotebooks) {
+        _logger.info(
+          'Notebook runtimeType: ${notebook.runtimeType}, value: ${notebook.toString()}',
+        );
         // Try different possible ID field names
-        final id =
-            notebook['id'] ??
-            notebook['_id'] ??
-            notebook['notebook_id'] ??
-            notebook['uuid'];
+        final id = (notebook is Map
+            ? (notebook['id'] ??
+                  notebook['_id'] ??
+                  notebook['notebook_id'] ??
+                  notebook['uuid'])
+            : (notebook.id ??
+                  notebook._id ??
+                  notebook.notebook_id ??
+                  notebook.uuid));
+        _logger.info('Extracted notebook id: $id');
         if (id != null && id is String) {
           _logger.info('Getting notes for notebook $id');
           final notes = await _noteService.getNotesForNotebook(id);
@@ -374,18 +382,31 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Search through all notes in all notebooks
     List<Map<String, dynamic>> results = [];
     for (final notebook in _notebooks) {
-      final notebookId = notebook['id'] as String;
+      final notebookId = (notebook is Map
+          ? (notebook['id'] ?? notebook['_id'])
+          : notebook.id ?? notebook._id);
       final notes = _notebookNotes[notebookId] ?? [];
+      final notebookName =
+          (notebook is Map ? notebook['name'] : notebook.name) ??
+          'Unknown Notebook';
 
       for (final note in notes) {
-        final title = (note['title'] as String?)?.toLowerCase() ?? '';
-        final content = (note['content'] as String?)?.toLowerCase() ?? '';
+        final title =
+            (note is Map ? (note['title'] as String?) : note.title)
+                ?.toLowerCase() ??
+            '';
+        final content =
+            (note is Map ? (note['content'] as String?) : note.content)
+                ?.toLowerCase() ??
+            '';
         final searchLower = query.toLowerCase();
 
         if (title.contains(searchLower) || content.contains(searchLower)) {
           // Add notebook info to the note for display
-          final noteWithNotebook = Map<String, dynamic>.from(note);
-          noteWithNotebook['notebookName'] = notebook['name'];
+          final noteWithNotebook = note is Map
+              ? Map<String, dynamic>.from(note)
+              : note.toMap();
+          noteWithNotebook['notebookName'] = notebookName;
           noteWithNotebook['notebookId'] = notebookId;
           results.add(noteWithNotebook);
         }
@@ -893,14 +914,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildNotesList() {
     // Collect all notes from all notebooks
+    _logger.info(
+      'Building notes list, _notebooks:  [38;5;2m [0m${_notebooks.runtimeType}, value: ${_notebooks.toString()}',
+    );
     List<Map<String, dynamic>> allNotes = [];
     for (final notebook in _notebooks) {
-      final notebookId = (notebook['id'] ?? notebook['_id']) as String?;
+      _logger.info(
+        'Notebook in _buildNotesList: ${notebook.runtimeType}, value: ${notebook.toString()}',
+      );
+      final notebookId = (notebook is Map
+          ? (notebook['id'] ?? notebook['_id'])
+          : notebook.id ?? notebook._id);
+      final notebookName =
+          (notebook is Map ? notebook['name'] : notebook.name) ??
+          'Unknown Notebook';
       if (notebookId != null) {
         final notes = _notebookNotes[notebookId] ?? [];
         for (final note in notes) {
-          final noteWithNotebook = Map<String, dynamic>.from(note);
-          noteWithNotebook['notebookName'] = notebook['name'];
+          final noteWithNotebook = note is Map
+              ? Map<String, dynamic>.from(note)
+              : note.toMap();
+          noteWithNotebook['notebookName'] = notebookName;
           noteWithNotebook['notebookId'] = notebookId;
           allNotes.add(noteWithNotebook);
         }

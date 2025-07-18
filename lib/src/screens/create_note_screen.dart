@@ -364,7 +364,9 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
                                 height: 16,
                                 decoration: BoxDecoration(
                                   color: (() {
-                                    final colorValue = notebook['color'];
+                                    final colorValue = (notebook is Map
+                                        ? notebook['color']
+                                        : notebook.color);
                                     if (colorValue is String &&
                                         colorValue.isNotEmpty) {
                                       try {
@@ -383,15 +385,22 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
                                 ),
                               ),
                               title: Text(
-                                (notebook['name'] as String?) ?? 'Untitled',
+                                (notebook is Map
+                                        ? notebook['name']
+                                        : notebook.name) ??
+                                    'Untitled',
                               ),
                               trailing:
                                   _selectedNotebookId ==
-                                      (notebook['id'] ?? notebook['_id'])
+                                      ((notebook is Map
+                                          ? (notebook['id'] ?? notebook['_id'])
+                                          : notebook.id ?? notebook._id))
                                   ? const Icon(Icons.check, color: Colors.green)
                                   : null,
                               onTap: () {
-                                final id = notebook['id'] ?? notebook['_id'];
+                                final id = (notebook is Map
+                                    ? (notebook['id'] ?? notebook['_id'])
+                                    : notebook.id ?? notebook._id);
                                 if (id != null && id is String) {
                                   setState(() {
                                     _selectedNotebookId = id;

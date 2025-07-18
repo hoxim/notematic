@@ -1,5 +1,2 @@
-import 'notebook_service_api.dart';
-import '../models/notebook.dart';
-import 'interfaces/notebook_service_interface.dart';
-
-INotebookService<Notebook> getNotebookService() => NotebookServiceApi();
+// This file is no longer used
+// The factory pattern has been consolidated in notebook_service_factory.dart

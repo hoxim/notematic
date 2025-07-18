@@ -1,5 +1,2 @@
-import 'note_service_api.dart';
-import '../models/note.dart';
-import 'interfaces/note_service_interface.dart';
-
-INoteService<Note> getNoteService() => NoteServiceApi();
+// This file is no longer used
+// The factory pattern has been consolidated in note_service_factory.dart

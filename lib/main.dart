@@ -9,6 +9,9 @@ import 'src/config/app_config.dart';
 import 'src/screens/login_screen.dart';
 import 'src/screens/register_screen.dart';
 
+// Conditionally import Couchbase Lite only for non-web platforms
+import 'src/utils/platform_imports.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -35,6 +38,11 @@ Future<void> main() async {
       (route) => false,
     );
   };
+
+  // Initialize platform-specific services
+  // (This will only initialize Couchbase Lite on non-web platforms)
+  logger.info('Initializing platform services');
+  await initializePlatformServices();
 
   logger.info('About to run app');
   runApp(const MyApp());

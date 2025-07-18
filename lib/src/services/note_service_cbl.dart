@@ -1,5 +1,4 @@
 import 'package:cbl/cbl.dart';
-import 'package:cbl_flutter/cbl_flutter.dart';
 import '../models/note.dart';
 import 'interfaces/note_service_interface.dart';
 import 'package:uuid/uuid.dart';
