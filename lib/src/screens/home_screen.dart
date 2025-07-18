@@ -7,6 +7,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../components/user_profile_menu.dart';
 import '../components/notebook_dialog.dart';
 import '../components/app_about_dialog.dart';
+import '../components/sync_toggle.dart';
+import '../components/search_bar.dart';
+import '../components/notes_list_view.dart';
+import '../components/search_results_list.dart';
+import '../components/create_fab.dart';
 
 const noteColors = [
   // Each entry: {'light': Color, 'dark': Color}
@@ -49,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   List<dynamic> _notebooks = [];
   Map<String, List<dynamic>> _notebookNotes = {};
   bool _isLoading = true;
-  bool isSyncEnabled = true; // globalna flaga synchronizacji
+  bool isSyncEnabled = true; // global sync flag
 
   // FAB animation
   late AnimationController _fabAnimationController;
@@ -400,16 +405,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         title: const Text('Notematic'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          Row(
-            children: [
-              const Text('Sync'),
-              Switch(
-                value: isSyncEnabled,
-                onChanged: (val) {
-                  _setSyncFlag(val);
-                },
-              ),
-            ],
+          SyncToggle(
+            value: isSyncEnabled,
+            onChanged: _setSyncFlag,
           ),
           IconButton(
             onPressed: widget.onToggleTheme,
@@ -438,33 +436,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Search field at the top
-                  Center(
-                    child: Container(
-                      constraints: const BoxConstraints(maxWidth: 400),
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: _performSearch,
-                        decoration: InputDecoration(
-                          hintText: 'Search notes...',
-                          prefixIcon: const Icon(Icons.search),
-                          suffixIcon: _searchQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear),
-                                  onPressed: _clearSearch,
-                                )
-                              : null,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(25),
-                          ),
-                          filled: true,
-                          fillColor: Theme.of(context).colorScheme.surface,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 12,
-                          ),
-                        ),
-                      ),
-                    ),
+                  NotesSearchBar(
+                    controller: _searchController,
+                    onChanged: _performSearch,
+                    onClear: _clearSearch,
+                    searchQuery: _searchQuery,
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -474,159 +450,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   const SizedBox(height: 24),
                   Expanded(
                     child: _isSearching
-                        ? _buildSearchResults()
-                        : _buildNotesList(),
+                        ? SearchResultsList(
+                            searchResults: _searchResults,
+                            searchQuery: _searchQuery,
+                            onNoteTap: _openNoteDetails,
+                          )
+                        : NotesListView(
+                            notes: _getAllNotes(),
+                            onNoteTap: _openNoteDetails,
+                          ),
                   ),
                 ],
               ),
             ),
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // Create Notebook option
-          if (_isFabExpanded)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: ScaleTransition(
-                scale: _fabAnimation,
-                child: FloatingActionButton.extended(
-                  onPressed: _createNotebook,
-                  heroTag: 'createNotebook',
-                  backgroundColor: Theme.of(context).colorScheme.secondary,
-                  foregroundColor: Theme.of(context).colorScheme.onSecondary,
-                  icon: const Icon(Icons.book),
-                  label: const Text('Notebook'),
-                ),
-              ),
-            ),
-          // Create Note option
-          if (_isFabExpanded)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: ScaleTransition(
-                scale: _fabAnimation,
-                child: FloatingActionButton.extended(
-                  onPressed: _createNote,
-                  heroTag: 'createNote',
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  icon: const Icon(Icons.note_add),
-                  label: const Text('Note'),
-                ),
-              ),
-            ),
-          // Main FAB
-          FloatingActionButton(
-            onPressed: _toggleFab,
-            heroTag: 'mainFab',
-            child: AnimatedRotation(
-              turns: _isFabExpanded ? 0.125 : 0, // 45 degrees
-              duration: const Duration(milliseconds: 300),
-              child: const Icon(Icons.add),
-            ),
-          ),
-        ],
+      floatingActionButton: CreateFAB(
+        isExpanded: _isFabExpanded,
+        animation: _fabAnimation,
+        onToggle: _toggleFab,
+        onCreateNote: _createNote,
+        onCreateNotebook: _createNotebook,
       ),
     );
   }
 
-  Widget _buildSearchResults() {
-    if (_searchResults.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.search_off,
-              size: 64,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No notes found for "${_searchQuery}"',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Try different keywords',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      itemCount: _searchResults.length,
-      itemBuilder: (context, index) {
-        final note = _searchResults[index];
-        final notebookName =
-            note['notebookName'] as String? ?? 'Unknown Notebook';
-
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              child: const Icon(Icons.note, color: Colors.white),
-            ),
-            title: Text(
-              note['title'] ?? 'Untitled',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (note['content'] != null)
-                  Text(
-                    (note['content'] as String).length > 100
-                        ? '${(note['content'] as String).substring(0, 100)}...'
-                        : note['content'],
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.folder,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      notebookName,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            onTap: () => _openNoteDetails(note),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildNotesList() {
-    // Collect all notes from all notebooks
-    _logger.info(
-      'Building notes list, _notebooks:  [38;5;2m [0m${_notebooks.runtimeType}, value: ${_notebooks.toString()}',
-    );
+  List<Map<String, dynamic>> _getAllNotes() {
     List<Map<String, dynamic>> allNotes = [];
     for (final notebook in _notebooks) {
-      _logger.info(
-        'Notebook in _buildNotesList: ${notebook.runtimeType}, value: ${notebook.toString()}',
-      );
       final notebookId = (notebook is Map
           ? (notebook['id'] ?? notebook['_id'])
           : notebook.id ?? notebook._id);
@@ -645,124 +494,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
       }
     }
-
-    if (allNotes.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.note_outlined,
-              size: 64,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No notes yet',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Create your first note to get started',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      itemCount: allNotes.length,
-      itemBuilder: (context, index) {
-        final note = allNotes[index];
-        final notebookName =
-            note['notebookName'] as String? ?? 'Unknown Notebook';
-        final tags = note['tags'] as List<dynamic>? ?? [];
-
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              child: const Icon(Icons.note, color: Colors.white),
-            ),
-            title: Text(
-              note['title'] ?? 'Untitled',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (note['content'] != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      (note['content'] as String).length > 150
-                          ? '${(note['content'] as String).substring(0, 150)}...'
-                          : note['content'],
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.folder,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      notebookName,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-                if (tags.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: tags.map((tag) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.secondary.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          tag.toString(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Theme.of(context).colorScheme.secondary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ],
-            ),
-            onTap: () => _openNoteDetails(note),
-          ),
-        );
-      },
-    );
+    return allNotes;
   }
+
+
 }

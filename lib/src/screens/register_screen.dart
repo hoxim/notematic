@@ -30,7 +30,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       // Health check now uses Rust FFI (apiHealth)
-      // Usuń powyższe linie i ewentualnie zastąp je TODO: implement health-check przez HTTP lub usuń sekcję sprawdzania API.
+      // TODO: Remove these lines and replace with proper HTTP health-check or remove API check section
       setState(() {
         _apiStatus = 'up'; // Placeholder for actual health check
       });

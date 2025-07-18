@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-class SearchBar extends StatelessWidget {
+class NotesSearchBar extends StatelessWidget {
   final TextEditingController controller;
   final Function(String) onChanged;
   final VoidCallback onClear;
   final String searchQuery;
 
-  const SearchBar({
+  const NotesSearchBar({
     super.key,
     required this.controller,
     required this.onChanged,

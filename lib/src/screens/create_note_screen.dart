@@ -71,7 +71,7 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
       final notebooks = await _notebookService.getUserNotebooks();
       _logger.info('Loaded notebooks: $notebooks');
 
-      // API zwraca {notebooks: []} zamiast bezpośrednio listy
+      // API returns {notebooks: []} instead of direct list
       List<dynamic> mappedNotebooks = [];
       if (notebooks.isNotEmpty && notebooks.first is Map) {
         final firstItem = notebooks.first as Map;
@@ -84,12 +84,12 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
         mappedNotebooks = notebooks;
       }
 
-      // Jeśli nie ma żadnych notebooków, utwórz domyślny
+      // If there are no notebooks, create a default one
       if (mappedNotebooks.isEmpty) {
         _logger.info('No notebooks found, creating default notebook');
         await _notebookService.createNotebook('Default');
         _logger.info('Default notebook created');
-        // Możesz dodać dodatkowe akcje, np. odświeżenie listy
+        // You can add additional actions here, e.g., refresh the list
       } else {
         setState(() {
           _notebooks = mappedNotebooks;
@@ -109,7 +109,7 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
       return;
     }
 
-    // Jeśli nie ma wybranego notebooka, utwórz domyślny "Untitled"
+    // If no notebook is selected, create a default "Untitled" one
     if (_selectedNotebookId == null) {
       setState(() {
         _isSaving = true;
@@ -131,7 +131,7 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
         _logger.info('Notebooks type: ${notebooks.runtimeType}');
         _logger.info('Notebooks length: ${notebooks.length}');
 
-        // Parsuj strukturę danych z API
+        // Parse data structure from API
         List<dynamic> mappedNotebooks = [];
         if (notebooks.isNotEmpty && notebooks.first is Map) {
           final firstItem = notebooks.first as Map;
@@ -153,14 +153,14 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
         _logger.info('Final mappedNotebooks length: ${mappedNotebooks.length}');
 
         if (mappedNotebooks.isNotEmpty) {
-          // Znajdź notebook "Untitled" lub weź pierwszy
+          // Find "Untitled" notebook or take the first one
           final untitledNotebook = mappedNotebooks.firstWhere(
             (notebook) => (notebook['name'] as String?) == 'Untitled',
             orElse: () => mappedNotebooks.first,
           );
           _logger.info('Selected notebook: $untitledNotebook');
 
-          // Sprawdź różne możliwe pola ID
+          // Check different possible ID fields
           final notebookId =
               untitledNotebook['id'] ??
               untitledNotebook['_id'] ??

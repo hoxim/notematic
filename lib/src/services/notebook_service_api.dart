@@ -46,7 +46,7 @@ class NotebookServiceApi implements INotebookService<Notebook> {
   @override
   Future<void> createDefaultNotebookIfNeeded() async {
     // TODO: Implement API call to create default notebook if needed
-    // Możesz wywołać createNotebook jeśli lista notatników jest pusta
+    // Call createNotebook if the list of notebooks is empty
   }
 
   @override

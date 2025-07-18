@@ -12,7 +12,7 @@ class ApiService {
   void Function()? onForceLogout;
 
   Future<void> initialize() async {
-    // Możesz tu dodać inicjalizację, np. sprawdzenie tokenu, refresh, itp.
+    // You can add initialization here, e.g., token check, refresh, etc.
   }
 
   Future<String?> getToken() async {
