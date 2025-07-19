@@ -1,11 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/note_service_factory.dart';
-import '../services/notebook_service_factory.dart';
-import '../models/note.dart';
-import '../models/notebook.dart';
 import '../services/logger_service.dart';
-import '../services/interfaces/note_service_interface.dart';
-import '../services/interfaces/notebook_service_interface.dart';
 import '../services/api_service.dart';
 import '../services/sync_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -30,9 +24,7 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _contentController = TextEditingController();
-  late final INotebookService<Notebook> _notebookService;
   final _logger = LoggerService();
-  late final INoteService<Note> _noteService;
 
   List<dynamic> _notebooks = [];
   String? _selectedNotebookId;
@@ -60,8 +52,6 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
   }
 
   Future<void> _initServices() async {
-    _noteService = await getNoteService();
-    _notebookService = await getNotebookService();
     _loadNotebooks();
   }
 

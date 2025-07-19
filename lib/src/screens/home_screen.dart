@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import '../services/note_service_factory.dart';
-import '../services/notebook_service_factory.dart';
 import '../services/logger_service.dart';
 import '../services/token_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,7 +12,6 @@ import '../components/search_results_list.dart';
 import '../components/create_fab.dart';
 import '../services/api_service.dart';
 import '../services/sync_service.dart';
-import '../models/note.dart'; // Added import for Note model
 
 const noteColors = [
   // Each entry: {'light': Color, 'dark': Color}
@@ -72,8 +69,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // About dialog state
 
-  dynamic _noteService;
-  dynamic _notebookService;
   final LoggerService _logger = LoggerService();
   final SyncService _syncService = SyncService();
 
@@ -93,8 +88,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _initServices() async {
-    _noteService = await getNoteService();
-    _notebookService = await getNotebookService();
     await _loadUserInfo();
   }
 
@@ -115,7 +108,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _logger.info('User loaded:  [38;5;2m$_userEmail [0m');
         if (!_defaultNotebookChecked) {
           _defaultNotebookChecked = true;
-          await _notebookService.createDefaultNotebookIfNeeded();
+          // Default notebook creation is handled by SyncService
         }
         await _loadNotebooksAndNotes();
       }
@@ -129,9 +122,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _isLoading = true;
     });
     try {
-      // Use SyncService to get all data (online + offline)
-      final allNotes = await _syncService.getAllNotes();
-      final allNotebooks = await _syncService.getAllNotebooks();
+      // Use SyncService to get all data with single sync
+      final allData = await _syncService.getAllDataWithSync();
+      final allNotes = allData['notes'] as List<dynamic>;
+      final allNotebooks = allData['notebooks'] as List<dynamic>;
 
       _logger.info('Loaded notebooks: $allNotebooks');
       _logger.info('Loaded notes: $allNotes');
@@ -141,7 +135,45 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       for (final notebook in allNotebooks) {
         final notebookId = notebook.uuid;
         final notesForNotebook =
-            await _syncService.getNotesForNotebook(notebookId);
+            allNotes.where((note) => note.notebookUuid == notebookId).toList();
+        notesMap[notebookId] = notesForNotebook;
+        _logger
+            .info('Notes for notebook $notebookId: ${notesForNotebook.length}');
+      }
+
+      setState(() {
+        _notebooks = allNotebooks;
+        _notebookNotes = notesMap;
+        _isLoading = false;
+      });
+      _logger.info('Final notebooks: $_notebooks');
+      _logger.info('Final notes map: $_notebookNotes');
+    } catch (e) {
+      _logger.error('Failed to load notebooks or notes: $e');
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadNotebooksAndNotesWithoutSync() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      // Use SyncService to get all data without sync
+      final allNotes = await _syncService.getAllNotes();
+      final allNotebooks = await _syncService.getAllNotebooks();
+
+      _logger.info('Loaded notebooks without sync: $allNotebooks');
+      _logger.info('Loaded notes without sync: $allNotes');
+
+      // Group notes by notebook
+      Map<String, List<dynamic>> notesMap = {};
+      for (final notebook in allNotebooks) {
+        final notebookId = notebook.uuid;
+        final notesForNotebook =
+            allNotes.where((note) => note.notebookUuid == notebookId).toList();
         notesMap[notebookId] = notesForNotebook;
         _logger
             .info('Notes for notebook $notebookId: ${notesForNotebook.length}');
@@ -201,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       },
     ).then((value) {
       if (value == true) {
-        _loadNotebooksAndNotes();
+        _loadNotebooksAndNotesWithoutSync();
       }
     });
   }
@@ -234,7 +266,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   ),
                 );
               }
-              await _loadNotebooksAndNotes();
+              await _loadNotebooksAndNotesWithoutSync();
             } catch (e) {
               _logger.error('Failed to create notebook: $e');
               if (mounted) {
@@ -375,6 +407,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() {
       isSyncEnabled = value;
     });
+
+    // Clear online mode cache when sync settings change
+    _syncService.clearOnlineModeCache();
   }
 
   /// Check if sync is enabled and API is available
@@ -427,8 +462,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       await _syncService.deleteNote(note['id']);
       _logger.info('Deleted note: ${note['title']}');
 
-      // Reload data
-      await _loadNotebooksAndNotes();
+      // Reload data without additional sync
+      await _loadNotebooksAndNotesWithoutSync();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -458,8 +493,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       await _syncService.syncNoteToApi(note['id']);
       _logger.info('Synced note: ${note['title']}');
 
-      // Reload data
-      await _loadNotebooksAndNotes();
+      // Reload data without additional sync
+      await _loadNotebooksAndNotesWithoutSync();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -490,8 +525,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       // Perform full sync
       await _syncService.fullSync();
 
-      // Reload data
-      await _loadNotebooksAndNotes();
+      // Reload data without additional sync
+      await _loadNotebooksAndNotesWithoutSync();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

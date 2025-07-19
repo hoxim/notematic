@@ -11,6 +11,10 @@ class SyncService {
   final ApiService _apiService = ApiService();
   final LoggerService _logger = LoggerService();
 
+  // Cache for online mode status
+  bool? _cachedOnlineMode;
+  DateTime? _lastOnlineCheck;
+
   /// Check if sync is enabled and API is available
   Future<bool> isOnlineMode() async {
     try {
@@ -20,16 +24,34 @@ class SyncService {
 
       if (!isSyncEnabled) {
         _logger.info('Sync is disabled - offline mode');
+        _cachedOnlineMode = false;
         return false;
+      }
+
+      // Use cached result if it's recent (less than 5 seconds old)
+      if (_cachedOnlineMode != null && _lastOnlineCheck != null) {
+        final timeSinceLastCheck = DateTime.now().difference(_lastOnlineCheck!);
+        if (timeSinceLastCheck.inSeconds < 5) {
+          return _cachedOnlineMode!;
+        }
       }
 
       // Check if API is available
       final isApiAvailable = await _apiService.isApiAvailable();
+      _cachedOnlineMode = isApiAvailable;
+      _lastOnlineCheck = DateTime.now();
       return isApiAvailable;
     } catch (e) {
       _logger.error('Error checking online mode: $e');
+      _cachedOnlineMode = false;
       return false; // Default to offline mode on error
     }
+  }
+
+  /// Clear online mode cache (call when sync settings change)
+  void clearOnlineModeCache() {
+    _cachedOnlineMode = null;
+    _lastOnlineCheck = null;
   }
 
   /// Sync local changes to API
@@ -39,6 +61,11 @@ class SyncService {
       return;
     }
 
+    await _performSyncToApi();
+  }
+
+  /// Internal method to perform sync to API (assumes online mode already checked)
+  Future<void> _performSyncToApi() async {
     try {
       // Sync dirty notes
       final dirtyNotes = await _localStorage.getDirtyNotes();
@@ -87,8 +114,13 @@ class SyncService {
       return;
     }
 
+    await _performSyncFromApi();
+  }
+
+  /// Internal method to perform sync from API (assumes online mode already checked)
+  Future<void> _performSyncFromApi() async {
     try {
-      // Sync notes from API - get all notebooks first, then notes for each
+      // Sync notes from API - get all notebooks first, then all notes in single request
       _logger.info('Fetching notebooks from API...');
       final notebooksResponse = await _apiService.get('/protected/notebooks');
       _logger.info(
@@ -107,35 +139,29 @@ class SyncService {
           _logger.info('Syncing notebooks to local storage...');
           await _localStorage.syncNotebooksToLocal(apiNotebooks);
 
-          // Get notes for each notebook
-          List<Map<String, dynamic>> allApiNotes = [];
-          for (final notebook in apiNotebooks) {
-            final notebookId = notebook['_id'];
-            _logger.info('Fetching notes for notebook: $notebookId');
+          // Get all notes in single request
+          _logger.info('Fetching all notes from API...');
+          final notesResponse = await _apiService.get('/protected/notes');
+          _logger
+              .info('Notes API response status: ${notesResponse.statusCode}');
+          _logger.info('Notes API response body: ${notesResponse.body}');
 
-            final notesResponse =
-                await _apiService.get('/protected/notebooks/$notebookId/notes');
-            _logger.info(
-                'Notes API response status for notebook $notebookId: ${notesResponse.statusCode}');
-
-            if (notesResponse.statusCode == 200) {
-              final notesData = jsonDecode(notesResponse.body);
-              if (notesData is Map<String, dynamic> &&
-                  notesData.containsKey('notes')) {
-                final apiNotes =
-                    (notesData['notes'] as List).cast<Map<String, dynamic>>();
-                _logger.info(
-                    'Found ${apiNotes.length} notes for notebook $notebookId');
-                allApiNotes.addAll(apiNotes);
-              }
+          if (notesResponse.statusCode == 200) {
+            final notesData = jsonDecode(notesResponse.body);
+            if (notesData is Map<String, dynamic> &&
+                notesData.containsKey('notes')) {
+              final apiNotes =
+                  (notesData['notes'] as List).cast<Map<String, dynamic>>();
+              _logger.info('Found ${apiNotes.length} notes from API');
+              await _localStorage.syncNotesToLocal(apiNotes);
             } else {
-              _logger.error(
-                  'Failed to fetch notes for notebook $notebookId: ${notesResponse.statusCode}');
+              _logger
+                  .warning('No notes found in API response or invalid format');
             }
+          } else {
+            _logger.error(
+                'Failed to fetch notes from API: ${notesResponse.statusCode}');
           }
-
-          _logger.info('Total notes found from API: ${allApiNotes.length}');
-          await _localStorage.syncNotesToLocal(allApiNotes);
         } else {
           _logger
               .warning('No notebooks found in API response or invalid format');
@@ -155,11 +181,17 @@ class SyncService {
   Future<void> fullSync() async {
     _logger.info('Starting full sync...');
 
+    final isOnline = await isOnlineMode();
+    if (!isOnline) {
+      _logger.warning('Cannot perform full sync - offline mode');
+      return;
+    }
+
     // First sync from API to get latest changes
-    await syncFromApi();
+    await _performSyncFromApi();
 
     // Then sync local changes to API
-    await syncToApi();
+    await _performSyncToApi();
 
     _logger.info('Full sync completed');
   }
@@ -269,25 +301,42 @@ class SyncService {
     }
   }
 
-  /// Get all notes (local + offline)
+  /// Get all notes (local + offline) - without syncing
   Future<List<NoteLocal>> getAllNotes() async {
-    // First sync from API to get latest data
+    return await _localStorage.getAllNotesWithOffline();
+  }
+
+  /// Get all notebooks (local + offline) - without syncing
+  Future<List<NotebookLocal>> getAllNotebooks() async {
+    return await _localStorage.getAllNotebooksWithOffline();
+  }
+
+  /// Get notes for specific notebook - without syncing
+  Future<List<NoteLocal>> getNotesForNotebook(String notebookUuid) async {
+    return await _localStorage.getNotesForNotebook(notebookUuid);
+  }
+
+  /// Get all notes with sync from API
+  Future<List<NoteLocal>> getAllNotesWithSync() async {
     await syncFromApi();
     return await _localStorage.getAllNotesWithOffline();
   }
 
-  /// Get all notebooks (local + offline)
-  Future<List<NotebookLocal>> getAllNotebooks() async {
-    // First sync from API to get latest data
+  /// Get all notebooks with sync from API
+  Future<List<NotebookLocal>> getAllNotebooksWithSync() async {
     await syncFromApi();
     return await _localStorage.getAllNotebooksWithOffline();
   }
 
-  /// Get notes for specific notebook
-  Future<List<NoteLocal>> getNotesForNotebook(String notebookUuid) async {
-    // First sync from API to get latest data
+  /// Get all notes and notebooks with single sync from API
+  Future<Map<String, List<dynamic>>> getAllDataWithSync() async {
     await syncFromApi();
-    return await _localStorage.getNotesForNotebook(notebookUuid);
+    final notes = await _localStorage.getAllNotesWithOffline();
+    final notebooks = await _localStorage.getAllNotebooksWithOffline();
+    return {
+      'notes': notes,
+      'notebooks': notebooks,
+    };
   }
 
   /// Delete note (offline or online)

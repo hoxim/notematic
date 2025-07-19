@@ -59,14 +59,17 @@ class ApiService {
   Future<http.Response> get(
     String endpoint, {
     Map<String, String>? headers,
+    bool enableLogging = true,
   }) async {
     final token = await getToken();
     final logger = LoggerService();
 
-    if (token == null) {
-      logger.warning('No token available for API request to: $endpoint');
-    } else {
-      logger.info('Using token for API request to: $endpoint');
+    if (enableLogging) {
+      if (token == null) {
+        logger.warning('No token available for API request to: $endpoint');
+      } else {
+        logger.info('Using token for API request to: $endpoint');
+      }
     }
 
     final allHeaders = <String, String>{
@@ -76,7 +79,10 @@ class ApiService {
 
     final response =
         await http.get(Uri.parse('$baseUrl$endpoint'), headers: allHeaders);
-    logger.info('API response for $endpoint: ${response.statusCode}');
+
+    if (enableLogging) {
+      logger.info('API response for $endpoint: ${response.statusCode}');
+    }
 
     return response;
   }
@@ -191,10 +197,7 @@ class ApiService {
   /// Check if API is available (for offline detection)
   Future<bool> isApiAvailable() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/health'),
-        headers: {'Content-Type': 'application/json'},
-      );
+      final response = await get('/health', enableLogging: false);
       return response.statusCode == 200;
     } catch (e) {
       return false;
