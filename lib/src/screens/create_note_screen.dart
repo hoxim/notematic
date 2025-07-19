@@ -6,6 +6,9 @@ import '../models/notebook.dart';
 import '../services/logger_service.dart';
 import '../services/interfaces/note_service_interface.dart';
 import '../services/interfaces/notebook_service_interface.dart';
+import '../services/api_service.dart';
+import '../services/sync_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CreateNoteScreen extends StatefulWidget {
   final String? notebookId;
@@ -62,37 +65,57 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
     _loadNotebooks();
   }
 
+  /// Check if sync is enabled and API is available
+  Future<bool> _isOfflineMode() async {
+    try {
+      // Check if sync is disabled
+      final prefs = await SharedPreferences.getInstance();
+      final isSyncEnabled = prefs.getBool('isSyncEnabled') ?? true;
+
+      if (!isSyncEnabled) {
+        return true; // Offline mode when sync is disabled
+      }
+
+      // Check if API is available
+      final apiService = ApiService();
+      final isApiAvailable = await apiService.isApiAvailable();
+
+      return !isApiAvailable; // Offline mode when API is not available
+    } catch (e) {
+      _logger.error('Error checking offline mode: $e');
+      return true; // Default to offline mode on error
+    }
+  }
+
   Future<void> _loadNotebooks() async {
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final notebooks = await _notebookService.getUserNotebooks();
+      // Use SyncService to get all notebooks (online + offline)
+      final syncService = SyncService();
+      final notebooks = await syncService.getAllNotebooks();
       _logger.info('Loaded notebooks: $notebooks');
 
-      // API returns {notebooks: []} instead of direct list
-      List<dynamic> mappedNotebooks = [];
-      if (notebooks.isNotEmpty && notebooks.first is Map) {
-        final firstItem = notebooks.first as Map;
-        if (firstItem.containsKey('notebooks')) {
-          mappedNotebooks = (firstItem['notebooks'] as List?) ?? [];
-        } else {
-          mappedNotebooks = notebooks;
-        }
-      } else {
-        mappedNotebooks = notebooks;
-      }
-
-      // If there are no notebooks, create a default one
-      if (mappedNotebooks.isEmpty) {
+      if (notebooks.isEmpty) {
         _logger.info('No notebooks found, creating default notebook');
-        await _notebookService.createNotebook('Default');
+        await syncService.createNotebook(
+          name: 'Default',
+          description: 'Default notebook for notes',
+          color: '#9C27B0',
+        );
         _logger.info('Default notebook created');
-        // You can add additional actions here, e.g., refresh the list
+
+        // Reload notebooks after creation
+        final updatedNotebooks = await syncService.getAllNotebooks();
+        setState(() {
+          _notebooks = updatedNotebooks;
+          _isLoading = false;
+        });
       } else {
         setState(() {
-          _notebooks = mappedNotebooks;
+          _notebooks = notebooks;
           _isLoading = false;
         });
       }
@@ -119,65 +142,32 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
         _logger.info(
           'No notebook selected, creating default "Untitled" notebook',
         );
-        await _notebookService.createNotebook(
-          'Untitled',
+
+        // Use SyncService to create notebook
+        final syncService = SyncService();
+        await syncService.createNotebook(
+          name: 'Untitled',
           description: 'Default notebook for notes',
           color: '#9C27B0',
         );
 
-        // Pobierz utworzony notebook i ustaw go jako wybrany
-        final notebooks = await _notebookService.getUserNotebooks();
+        // Get the created notebook and set it as selected
+        final notebooks = await syncService.getAllNotebooks();
         _logger.info('Retrieved notebooks after creation: $notebooks');
-        _logger.info('Notebooks type: ${notebooks.runtimeType}');
-        _logger.info('Notebooks length: ${notebooks.length}');
 
-        // Parse data structure from API
-        List<dynamic> mappedNotebooks = [];
-        if (notebooks.isNotEmpty && notebooks.first is Map) {
-          final firstItem = notebooks.first as Map;
-          _logger.info('First item keys: ${firstItem.keys.toList()}');
-          if (firstItem.containsKey('notebooks')) {
-            mappedNotebooks = (firstItem['notebooks'] as List?) ?? [];
-            _logger.info(
-              'Extracted notebooks from firstItem: $mappedNotebooks',
-            );
-          } else {
-            mappedNotebooks = notebooks;
-            _logger.info('Using notebooks directly: $mappedNotebooks');
-          }
-        } else {
-          mappedNotebooks = notebooks;
-          _logger.info('Using notebooks directly (not Map): $mappedNotebooks');
-        }
-
-        _logger.info('Final mappedNotebooks length: ${mappedNotebooks.length}');
-
-        if (mappedNotebooks.isNotEmpty) {
+        if (notebooks.isNotEmpty) {
           // Find "Untitled" notebook or take the first one
-          final untitledNotebook = mappedNotebooks.firstWhere(
-            (notebook) => (notebook['name'] as String?) == 'Untitled',
-            orElse: () => mappedNotebooks.first,
+          final untitledNotebook = notebooks.firstWhere(
+            (notebook) => notebook.name == 'Untitled',
+            orElse: () => notebooks.first,
           );
           _logger.info('Selected notebook: $untitledNotebook');
 
-          // Check different possible ID fields
-          final notebookId =
-              untitledNotebook['id'] ??
-              untitledNotebook['_id'] ??
-              untitledNotebook['notebook_id'];
-          _logger.info('Notebook ID found: $notebookId');
-
-          if (notebookId != null && notebookId is String) {
-            _selectedNotebookId = notebookId;
-            _logger.info('Default notebook created and selected: $notebookId');
-          } else {
-            _logger.error('Notebook structure: $untitledNotebook');
-            throw Exception(
-              'Failed to get notebook ID - ID is null or not a string',
-            );
-          }
+          _selectedNotebookId = untitledNotebook.uuid;
+          _logger.info(
+              'Default notebook created and selected: ${untitledNotebook.uuid}');
         } else {
-          _logger.error('No notebooks found in mappedNotebooks');
+          _logger.error('No notebooks found after creation');
           throw Exception(
             'Failed to create default notebook - no notebooks returned',
           );
@@ -202,14 +192,14 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
     });
 
     try {
-      final note = Note(
-        id: UniqueKey().toString(),
+      // Use SyncService to create note (handles both online and offline)
+      final syncService = SyncService();
+
+      await syncService.createNote(
         title: _titleController.text.trim(),
         content: _contentController.text.trim(),
-        updatedAt: DateTime.now(),
         notebookUuid: _selectedNotebookId!,
       );
-      await _noteService.upsertNote(note);
 
       _logger.info('Note created successfully');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -359,60 +349,76 @@ class _CreateNoteScreenState extends State<CreateNoteScreen> {
                           itemBuilder: (context, index) {
                             final notebook = _notebooks[index];
                             return ListTile(
-                              leading: Container(
-                                width: 16,
-                                height: 16,
-                                decoration: BoxDecoration(
-                                  color: (() {
-                                    final colorValue = (notebook is Map
-                                        ? notebook['color']
-                                        : notebook.color);
-                                    if (colorValue is String &&
-                                        colorValue.isNotEmpty) {
-                                      try {
-                                        return Color(
-                                          int.parse(
-                                            colorValue.replaceAll('#', '0xFF'),
-                                          ),
-                                        );
-                                      } catch (_) {
+                              leading: Stack(
+                                children: [
+                                  Container(
+                                    width: 16,
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color: (() {
+                                        final colorValue = notebook.color;
+                                        if (colorValue != null &&
+                                            colorValue.isNotEmpty) {
+                                          try {
+                                            return Color(
+                                              int.parse(
+                                                colorValue.replaceAll(
+                                                    '#', '0xFF'),
+                                              ),
+                                            );
+                                          } catch (_) {
+                                            return const Color(0xFF2196F3);
+                                          }
+                                        }
                                         return const Color(0xFF2196F3);
-                                      }
-                                    }
-                                    return const Color(0xFF2196F3);
-                                  })(),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
+                                      })(),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  // Offline indicator for notebooks
+                                  if (notebook.isOffline)
+                                    Positioned(
+                                      right: -2,
+                                      top: -2,
+                                      child: Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .surface,
+                                            width: 1,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
-                              title: Text(
-                                (notebook is Map
-                                        ? notebook['name']
-                                        : notebook.name) ??
-                                    'Untitled',
+                              title: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      notebook.name ?? 'Untitled',
+                                    ),
+                                  ),
+                                  if (notebook.isOffline)
+                                    const Icon(
+                                      Icons.cloud_off,
+                                      size: 16,
+                                      color: Colors.orange,
+                                    ),
+                                ],
                               ),
-                              trailing:
-                                  _selectedNotebookId ==
-                                      ((notebook is Map
-                                          ? (notebook['id'] ?? notebook['_id'])
-                                          : notebook.id ?? notebook._id))
+                              trailing: _selectedNotebookId == notebook.uuid
                                   ? const Icon(Icons.check, color: Colors.green)
                                   : null,
                               onTap: () {
-                                final id = (notebook is Map
-                                    ? (notebook['id'] ?? notebook['_id'])
-                                    : notebook.id ?? notebook._id);
-                                if (id != null && id is String) {
-                                  setState(() {
-                                    _selectedNotebookId = id;
-                                  });
-                                } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Notebook ID is missing!'),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                }
+                                setState(() {
+                                  _selectedNotebookId = notebook.uuid;
+                                });
                               },
                             );
                           },

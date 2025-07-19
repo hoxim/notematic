@@ -1,0 +1,268 @@
+{
+  "_note1": "KEEP THIS FILE! Check https://docs.objectbox.io/getting-started#generate-code",
+  "_note2": "This file is used to generate ObjectBox model code. See the 'objectbox-model.json' file.",
+  "_note3": "When you add/remove entities or change properties, delete the generated code and run 'flutter packages pub run build_runner build' to regenerate it.",
+  "entities": [
+    {
+      "id": "1:1",
+      "lastPropertyId": "11:11",
+      "name": "NoteLocal",
+      "properties": [
+        {
+          "id": "1:1",
+          "name": "id",
+          "type": "Long"
+        },
+        {
+          "id": "2:2",
+          "name": "uuid",
+          "type": "String"
+        },
+        {
+          "id": "3:3",
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "id": "4:4",
+          "name": "content",
+          "type": "String"
+        },
+        {
+          "id": "5:5",
+          "name": "updatedAt",
+          "type": "Date"
+        },
+        {
+          "id": "6:6",
+          "name": "deleted",
+          "type": "Bool"
+        },
+        {
+          "id": "7:7",
+          "name": "isDirty",
+          "type": "Bool"
+        },
+        {
+          "id": "8:8",
+          "name": "isOffline",
+          "type": "Bool"
+        },
+        {
+          "id": "9:9",
+          "name": "notebookUuid",
+          "type": "String"
+        },
+        {
+          "id": "10:10",
+          "name": "localVersion",
+          "type": "String"
+        },
+        {
+          "id": "11:11",
+          "name": "serverVersion",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "id": "2:2",
+      "lastPropertyId": "11:11",
+      "name": "NotebookLocal",
+      "properties": [
+        {
+          "id": "1:1",
+          "name": "id",
+          "type": "Long"
+        },
+        {
+          "id": "2:2",
+          "name": "uuid",
+          "type": "String"
+        },
+        {
+          "id": "3:3",
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "id": "4:4",
+          "name": "description",
+          "type": "String"
+        },
+        {
+          "id": "5:5",
+          "name": "color",
+          "type": "String"
+        },
+        {
+          "id": "6:6",
+          "name": "updatedAt",
+          "type": "Date"
+        },
+        {
+          "id": "7:7",
+          "name": "deleted",
+          "type": "Bool"
+        },
+        {
+          "id": "8:8",
+          "name": "isDirty",
+          "type": "Bool"
+        },
+        {
+          "id": "9:9",
+          "name": "isOffline",
+          "type": "Bool"
+        },
+        {
+          "id": "10:10",
+          "name": "localVersion",
+          "type": "String"
+        },
+        {
+          "id": "11:11",
+          "name": "serverVersion",
+          "type": "String"
+        }
+      ]
+    }
+  ],
+  "model": {
+    "entities": [
+      {
+        "id": "1:1",
+        "lastPropertyId": "11:11",
+        "name": "NoteLocal",
+        "properties": [
+          {
+            "id": "1:1",
+            "name": "id",
+            "type": "Long"
+          },
+          {
+            "id": "2:2",
+            "name": "uuid",
+            "type": "String"
+          },
+          {
+            "id": "3:3",
+            "name": "title",
+            "type": "String"
+          },
+          {
+            "id": "4:4",
+            "name": "content",
+            "type": "String"
+          },
+          {
+            "id": "5:5",
+            "name": "updatedAt",
+            "type": "Date"
+          },
+          {
+            "id": "6:6",
+            "name": "deleted",
+            "type": "Bool"
+          },
+          {
+            "id": "7:7",
+            "name": "isDirty",
+            "type": "Bool"
+          },
+          {
+            "id": "8:8",
+            "name": "isOffline",
+            "type": "Bool"
+          },
+          {
+            "id": "9:9",
+            "name": "notebookUuid",
+            "type": "String"
+          },
+          {
+            "id": "10:10",
+            "name": "localVersion",
+            "type": "String"
+          },
+          {
+            "id": "11:11",
+            "name": "serverVersion",
+            "type": "String"
+          }
+        ]
+      },
+      {
+        "id": "2:2",
+        "lastPropertyId": "11:11",
+        "name": "NotebookLocal",
+        "properties": [
+          {
+            "id": "1:1",
+            "name": "id",
+            "type": "Long"
+          },
+          {
+            "id": "2:2",
+            "name": "uuid",
+            "type": "String"
+          },
+          {
+            "id": "3:3",
+            "name": "name",
+            "type": "String"
+          },
+          {
+            "id": "4:4",
+            "name": "description",
+            "type": "String"
+          },
+          {
+            "id": "5:5",
+            "name": "color",
+            "type": "String"
+          },
+          {
+            "id": "6:6",
+            "name": "updatedAt",
+            "type": "Date"
+          },
+          {
+            "id": "7:7",
+            "name": "deleted",
+            "type": "Bool"
+          },
+          {
+            "id": "8:8",
+            "name": "isDirty",
+            "type": "Bool"
+          },
+          {
+            "id": "9:9",
+            "name": "isOffline",
+            "type": "Bool"
+          },
+          {
+            "id": "10:10",
+            "name": "localVersion",
+            "type": "String"
+          },
+          {
+            "id": "11:11",
+            "name": "serverVersion",
+            "type": "String"
+          }
+        ]
+      }
+    ],
+    "lastEntityId": "2:2",
+    "lastIndexId": "0:0",
+    "lastRelationId": "0:0",
+    "modelVersion": 5,
+    "retiredEntityUids": [],
+    "retiredIndexUids": [],
+    "retiredPropertyUids": [],
+    "retiredRelationUids": [],
+    "version": 1
+  }
+} 

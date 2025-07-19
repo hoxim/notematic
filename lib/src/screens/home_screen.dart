@@ -12,6 +12,9 @@ import '../components/search_bar.dart';
 import '../components/notes_list_view.dart';
 import '../components/search_results_list.dart';
 import '../components/create_fab.dart';
+import '../services/api_service.dart';
+import '../services/sync_service.dart';
+import '../models/note.dart'; // Added import for Note model
 
 const noteColors = [
   // Each entry: {'light': Color, 'dark': Color}
@@ -69,10 +72,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // About dialog state
 
-
   dynamic _noteService;
   dynamic _notebookService;
   final LoggerService _logger = LoggerService();
+  final SyncService _syncService = SyncService();
 
   @override
   void initState() {
@@ -126,49 +129,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _isLoading = true;
     });
     try {
-      final notebooks = await _notebookService.getUserNotebooks();
-      _logger.info('Loaded notebooks: $notebooks');
+      // Use SyncService to get all data (online + offline)
+      final allNotes = await _syncService.getAllNotes();
+      final allNotebooks = await _syncService.getAllNotebooks();
 
-      // Parse the API response structure
-      List<dynamic> mappedNotebooks = [];
-      if (notebooks.isNotEmpty && notebooks.first is Map) {
-        final firstItem = notebooks.first as Map;
-        if (firstItem.containsKey('notebooks')) {
-          mappedNotebooks = (firstItem['notebooks'] as List?) ?? [];
-        } else {
-          mappedNotebooks = notebooks;
-        }
-      } else {
-        mappedNotebooks = notebooks;
-      }
+      _logger.info('Loaded notebooks: $allNotebooks');
+      _logger.info('Loaded notes: $allNotes');
 
+      // Group notes by notebook
       Map<String, List<dynamic>> notesMap = {};
-      for (final notebook in mappedNotebooks) {
-        _logger.info(
-          'Notebook runtimeType: ${notebook.runtimeType}, value: ${notebook.toString()}',
-        );
-        // Try different possible ID field names
-        final id = (notebook is Map
-            ? (notebook['id'] ??
-                  notebook['_id'] ??
-                  notebook['notebook_id'] ??
-                  notebook['uuid'])
-            : (notebook.id ??
-                  notebook._id ??
-                  notebook.notebook_id ??
-                  notebook.uuid));
-        _logger.info('Extracted notebook id: $id');
-        if (id != null && id is String) {
-          _logger.info('Getting notes for notebook $id');
-          final notes = await _noteService.getNotesForNotebook(id);
-          _logger.info('Loaded notes for notebook $id: $notes');
-          notesMap[id] = notes;
-        } else {
-          _logger.error('Notebook structure: $notebook');
-        }
+      for (final notebook in allNotebooks) {
+        final notebookId = notebook.uuid;
+        final notesForNotebook =
+            await _syncService.getNotesForNotebook(notebookId);
+        notesMap[notebookId] = notesForNotebook;
+        _logger
+            .info('Notes for notebook $notebookId: ${notesForNotebook.length}');
       }
+
       setState(() {
-        _notebooks = mappedNotebooks;
+        _notebooks = allNotebooks;
         _notebookNotes = notesMap;
         _isLoading = false;
       });
@@ -214,18 +194,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
 
     // Navigate to create note screen with first notebook selected
-    Navigator.of(context)
-        .pushNamed(
-          '/create-note',
-          arguments: {
-            'notebookId': _notebooks.first['id'] ?? _notebooks.first['_id'],
-          },
-        )
-        .then((value) {
-          if (value == true) {
-            _loadNotebooksAndNotes();
-          }
-        });
+    Navigator.of(context).pushNamed(
+      '/create-note',
+      arguments: {
+        'notebookId': _notebooks.first.uuid,
+      },
+    ).then((value) {
+      if (value == true) {
+        _loadNotebooksAndNotes();
+      }
+    });
   }
 
   void _createNotebook() {
@@ -239,22 +217,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       builder: (BuildContext context) {
         return NotebookDialog(
           onCreate: (name, description, color) async {
-            await _notebookService.createNotebook(
-              name,
-              description: description,
-              color: color,
-            );
-
-            _logger.info('Notebook created successfully');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Notebook created successfully!'),
-                  backgroundColor: Colors.green,
-                ),
+            try {
+              _logger.info('Creating notebook via SyncService');
+              await _syncService.createNotebook(
+                name: name,
+                description: description,
+                color: color,
               );
+
+              _logger.info('Notebook created successfully');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Notebook created successfully!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+              await _loadNotebooksAndNotes();
+            } catch (e) {
+              _logger.error('Failed to create notebook: $e');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Failed to create notebook'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
             }
-            await _loadNotebooksAndNotes();
           },
         );
       },
@@ -278,30 +269,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Search through all notes in all notebooks
     List<Map<String, dynamic>> results = [];
     for (final notebook in _notebooks) {
-      final notebookId = (notebook is Map
-          ? (notebook['id'] ?? notebook['_id'])
-          : notebook.id ?? notebook._id);
+      final notebookId = notebook.uuid;
       final notes = _notebookNotes[notebookId] ?? [];
-      final notebookName =
-          (notebook is Map ? notebook['name'] : notebook.name) ??
-          'Unknown Notebook';
+      final notebookName = notebook.name ?? 'Unknown Notebook';
 
       for (final note in notes) {
-        final title =
-            (note is Map ? (note['title'] as String?) : note.title)
-                ?.toLowerCase() ??
-            '';
-        final content =
-            (note is Map ? (note['content'] as String?) : note.content)
-                ?.toLowerCase() ??
-            '';
+        final title = note.title.toLowerCase();
+        final content = note.content.toLowerCase();
         final searchLower = query.toLowerCase();
 
         if (title.contains(searchLower) || content.contains(searchLower)) {
           // Add notebook info to the note for display
-          final noteWithNotebook = note is Map
-              ? Map<String, dynamic>.from(note)
-              : note.toMap();
+          final noteWithNotebook = note.toMap();
           noteWithNotebook['notebookName'] = notebookName;
           noteWithNotebook['notebookId'] = notebookId;
           results.add(noteWithNotebook);
@@ -386,7 +365,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Future<void> _loadSyncFlag() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      isSyncEnabled = prefs.getBool('isSyncEnabled') ?? true;
+      isSyncEnabled = prefs.getBool('isSyncEnabled') ?? false;
     });
   }
 
@@ -396,6 +375,143 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() {
       isSyncEnabled = value;
     });
+  }
+
+  /// Check if sync is enabled and API is available
+  Future<bool> _isOfflineMode() async {
+    try {
+      // Check if sync is disabled
+      if (!isSyncEnabled) {
+        return true; // Offline mode when sync is disabled
+      }
+
+      // Check if API is available
+      final apiService = ApiService();
+      final isApiAvailable = await apiService.isApiAvailable();
+
+      return !isApiAvailable; // Offline mode when API is not available
+    } catch (e) {
+      _logger.error('Error checking offline mode: $e');
+      return true; // Default to offline mode on error
+    }
+  }
+
+  Future<void> _deleteNote(Map<String, dynamic> note) async {
+    try {
+      // Show confirmation dialog
+      final shouldDelete = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Delete Note'),
+            content:
+                Text('Are you sure you want to delete "${note['title']}"?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Delete'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldDelete != true) return;
+
+      // Delete the note
+      await _syncService.deleteNote(note['id']);
+      _logger.info('Deleted note: ${note['title']}');
+
+      // Reload data
+      await _loadNotebooksAndNotes();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Note "${note['title']}" deleted')),
+        );
+      }
+    } catch (e) {
+      _logger.error('Failed to delete note: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to delete note')),
+        );
+      }
+    }
+  }
+
+  Future<void> _syncNote(Map<String, dynamic> note) async {
+    try {
+      // Show loading indicator
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Synchronizing note...')),
+        );
+      }
+
+      // Sync the note
+      await _syncService.syncNoteToApi(note['id']);
+      _logger.info('Synced note: ${note['title']}');
+
+      // Reload data
+      await _loadNotebooksAndNotes();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Note "${note['title']}" synchronized')),
+        );
+      }
+    } catch (e) {
+      _logger.error('Failed to sync note: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to synchronize note')),
+        );
+      }
+    }
+  }
+
+  Future<void> _syncNow() async {
+    try {
+      _logger.info('Manual sync requested');
+
+      // Show loading indicator
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Synchronizing...')),
+        );
+      }
+
+      // Perform full sync
+      await _syncService.fullSync();
+
+      // Reload data
+      await _loadNotebooksAndNotes();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sync completed'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      _logger.error('Manual sync failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Sync failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -408,15 +524,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           SyncToggle(
             value: isSyncEnabled,
             onChanged: _setSyncFlag,
+            onSyncNow: _syncNow,
           ),
           IconButton(
             onPressed: widget.onToggleTheme,
             icon: widget.themeMode == ThemeMode.dark
                 ? const Icon(Icons.wb_sunny_outlined)
                 : const Icon(Icons.nightlight_round),
-            tooltip: widget.themeMode == ThemeMode.dark
-                ? 'Light mode'
-                : 'Dark mode',
+            tooltip:
+                widget.themeMode == ThemeMode.dark ? 'Light mode' : 'Dark mode',
           ),
           // User profile menu
           UserProfileMenu(
@@ -458,6 +574,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         : NotesListView(
                             notes: _getAllNotes(),
                             onNoteTap: _openNoteDetails,
+                            onDeleteNote: _deleteNote,
+                            onSyncNote: _syncNote,
                           ),
                   ),
                 ],
@@ -476,26 +594,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   List<Map<String, dynamic>> _getAllNotes() {
     List<Map<String, dynamic>> allNotes = [];
     for (final notebook in _notebooks) {
-      final notebookId = (notebook is Map
-          ? (notebook['id'] ?? notebook['_id'])
-          : notebook.id ?? notebook._id);
-      final notebookName =
-          (notebook is Map ? notebook['name'] : notebook.name) ??
-          'Unknown Notebook';
-      if (notebookId != null) {
-        final notes = _notebookNotes[notebookId] ?? [];
-        for (final note in notes) {
-          final noteWithNotebook = note is Map
-              ? Map<String, dynamic>.from(note)
-              : note.toMap();
-          noteWithNotebook['notebookName'] = notebookName;
-          noteWithNotebook['notebookId'] = notebookId;
-          allNotes.add(noteWithNotebook);
-        }
+      final notebookId = notebook.uuid;
+      final notebookName = notebook.name ?? 'Unknown Notebook';
+      final notes = _notebookNotes[notebookId] ?? [];
+      for (final note in notes) {
+        final noteWithNotebook = note.toMap();
+        noteWithNotebook['notebookName'] = notebookName;
+        noteWithNotebook['notebookId'] = notebookId;
+        allNotes.add(noteWithNotebook);
       }
     }
     return allNotes;
   }
-
-
 }

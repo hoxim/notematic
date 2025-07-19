@@ -12,11 +12,15 @@ class NotebookServiceApi implements INotebookService<Notebook> {
     String? description,
     String? color,
   }) async {
-    // TODO: Implement API call to create notebook
-    await _api.post(
+    final response = await _api.post(
       '/protected/notebooks',
       body: {'name': name, 'description': description, 'color': color},
     );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception(
+          'Failed to create notebook: ${response.statusCode} - ${response.body}');
+    }
   }
 
   @override
@@ -52,5 +56,24 @@ class NotebookServiceApi implements INotebookService<Notebook> {
   @override
   Future<void> syncWithApi() async {
     // No-op for API version
+  }
+
+  /// Create a notebook with offline flag set to true
+  static Notebook createOfflineNotebook({
+    required String name,
+    String? description,
+    String? color,
+  }) {
+    return Notebook(
+      uuid: DateTime.now()
+          .millisecondsSinceEpoch
+          .toString(), // Temporary local ID
+      name: name,
+      description: description,
+      color: color,
+      updatedAt: DateTime.now(),
+      isOffline: true,
+      isDirty: true, // Mark as needing sync when online
+    );
   }
 }

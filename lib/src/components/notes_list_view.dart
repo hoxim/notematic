@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 class NotesListView extends StatelessWidget {
   final List<Map<String, dynamic>> notes;
   final Function(Map<String, dynamic>) onNoteTap;
+  final Function(Map<String, dynamic>)? onDeleteNote;
+  final Function(Map<String, dynamic>)? onSyncNote;
   final bool isLoading;
 
   const NotesListView({
     super.key,
     required this.notes,
     required this.onNoteTap,
+    this.onDeleteNote,
+    this.onSyncNote,
     this.isLoading = false,
   });
 
@@ -32,15 +36,21 @@ class NotesListView extends StatelessWidget {
             Text(
               'No notes yet',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              ),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.7),
+                  ),
             ),
             const SizedBox(height: 8),
             Text(
               'Create your first note to get started',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-              ),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.5),
+                  ),
             ),
           ],
         ),
@@ -51,16 +61,47 @@ class NotesListView extends StatelessWidget {
       itemCount: notes.length,
       itemBuilder: (context, index) {
         final note = notes[index];
-        final notebookName = note['notebookName'] as String? ?? 'Unknown Notebook';
+        final notebookName =
+            note['notebookName'] as String? ?? 'Unknown Notebook';
         final tags = note['tags'] as List<dynamic>? ?? [];
 
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
           child: ListTile(
             contentPadding: const EdgeInsets.all(16),
-            leading: CircleAvatar(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              child: const Icon(Icons.note, color: Colors.white),
+            leading: Stack(
+              children: [
+                CircleAvatar(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  child: const Icon(Icons.note, color: Colors.white),
+                ),
+                // Online/Offline indicator
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: note['isOffline'] == true
+                          ? Colors.orange
+                          : Colors.green,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.surface,
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(
+                      note['isOffline'] == true
+                          ? Icons.cloud_off
+                          : Icons.cloud_done,
+                      size: 8,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
             title: Text(
               note['title'] ?? 'Untitled',
@@ -103,6 +144,42 @@ class NotesListView extends StatelessWidget {
                   const SizedBox(height: 8),
                   _buildTagList(context, tags),
                 ],
+              ],
+            ),
+            trailing: PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert),
+              onSelected: (value) {
+                switch (value) {
+                  case 'delete':
+                    onDeleteNote?.call(note);
+                    break;
+                  case 'sync':
+                    onSyncNote?.call(note);
+                    break;
+                }
+              },
+              itemBuilder: (context) => [
+                if (note['isOffline'] == true)
+                  const PopupMenuItem<String>(
+                    value: 'sync',
+                    child: Row(
+                      children: [
+                        Icon(Icons.cloud_upload, size: 20),
+                        SizedBox(width: 8),
+                        Text('Synchronize online'),
+                      ],
+                    ),
+                  ),
+                const PopupMenuItem<String>(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete, size: 20, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text('Delete note', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
               ],
             ),
             onTap: () => onNoteTap(note),

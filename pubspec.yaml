@@ -4,13 +4,13 @@ publish_to: 'none'
 version: 0.1.0
 
 environment:
-  sdk: ^3.8.1
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.10.0"
 
 dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: 1.0.8
-  cbl_flutter: 3.3.2
   http: 1.4.0
   shared_preferences: 2.5.3
   logger: 2.6.0
@@ -19,12 +19,14 @@ dependencies:
   flutter_dotenv: 5.2.1
   path_provider: 2.1.5
   uuid: 4.5.1
-  cbl_flutter_ce: 3.4.0
+  # objectbox: ^2.5.0
+  # objectbox_flutter_libs: ^2.5.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: 6.0.0
+  build_runner: 2.4.6
 flutter:
   uses-material-design: true
   assets:

@@ -58,4 +58,40 @@ class NoteServiceApi implements INoteService<Note> {
   Future<void> syncWithApi() async {
     // No-op for API version
   }
+
+  /// Create a note with offline flag set to true
+  static Note createOfflineNote({
+    required String title,
+    required String content,
+    required String notebookUuid,
+  }) {
+    return Note(
+      uuid: DateTime.now()
+          .millisecondsSinceEpoch
+          .toString(), // Temporary local ID
+      title: title,
+      content: content,
+      updatedAt: DateTime.now(),
+      notebookUuid: notebookUuid,
+      isOffline: true,
+      isDirty: true, // Mark as needing sync when online
+    );
+  }
+
+  /// Sync offline notes to API
+  Future<void> syncOfflineNotes(List<Note> offlineNotes) async {
+    for (final note in offlineNotes) {
+      if (note.isOffline && note.isDirty) {
+        try {
+          await upsertNote(note);
+          // Mark as synced
+          note.isOffline = false;
+          note.isDirty = false;
+        } catch (e) {
+          // Keep as offline if sync fails
+          note.isDirty = true;
+        }
+      }
+    }
+  }
 }

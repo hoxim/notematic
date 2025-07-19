@@ -41,10 +41,18 @@ class ApiService {
       if (token != null) 'Authorization': 'Bearer $token',
       ...?headers,
     };
+
+    String? bodyString;
+    if (body is String) {
+      bodyString = body;
+    } else if (body is Map) {
+      bodyString = jsonEncode(body);
+    }
+
     return await http.post(
       Uri.parse('$baseUrl$endpoint'),
       headers: allHeaders,
-      body: body,
+      body: bodyString,
     );
   }
 
@@ -53,11 +61,37 @@ class ApiService {
     Map<String, String>? headers,
   }) async {
     final token = await getToken();
+    final logger = LoggerService();
+
+    if (token == null) {
+      logger.warning('No token available for API request to: $endpoint');
+    } else {
+      logger.info('Using token for API request to: $endpoint');
+    }
+
     final allHeaders = <String, String>{
       if (token != null) 'Authorization': 'Bearer $token',
       ...?headers,
     };
-    return await http.get(Uri.parse('$baseUrl$endpoint'), headers: allHeaders);
+
+    final response =
+        await http.get(Uri.parse('$baseUrl$endpoint'), headers: allHeaders);
+    logger.info('API response for $endpoint: ${response.statusCode}');
+
+    return response;
+  }
+
+  Future<http.Response> delete(
+    String endpoint, {
+    Map<String, String>? headers,
+  }) async {
+    final token = await getToken();
+    final allHeaders = <String, String>{
+      if (token != null) 'Authorization': 'Bearer $token',
+      ...?headers,
+    };
+    return await http.delete(Uri.parse('$baseUrl$endpoint'),
+        headers: allHeaders);
   }
 
   /// Push local notes to API
@@ -68,7 +102,7 @@ class ApiService {
         notes
             .map(
               (n) => {
-                'uuid': n.id,
+                'uuid': n.uuid,
                 'title': n.title,
                 'content': n.content,
                 'updatedAt': n.updatedAt.toIso8601String(),
@@ -152,5 +186,18 @@ class ApiService {
   /// Example logout method
   Future<void> logout() async {
     await clearToken();
+  }
+
+  /// Check if API is available (for offline detection)
+  Future<bool> isApiAvailable() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/health'),
+        headers: {'Content-Type': 'application/json'},
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
   }
 }

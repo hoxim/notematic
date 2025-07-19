@@ -1,16 +1,8 @@
 import 'interfaces/note_service_interface.dart';
 import '../models/note.dart';
-import 'note_service_api.dart';
-import 'package:cbl/cbl.dart';
-import 'note_service_cbl.dart';
+import 'note_service.dart';
 
 Future<INoteService<Note>> getNoteService({bool offline = true}) async {
-  if (offline) {
-    // Use Couchbase Lite for mobile and desktop platforms
-    final db = await Database.openAsync('notematic-notes');
-    final collection = await db.defaultCollection;
-    return NoteServiceCBL(db, collection);
-  } else {
-    return NoteServiceApi();
-  }
+  // Always use API for now
+  return NoteServiceApi() as INoteService<Note>;
 }

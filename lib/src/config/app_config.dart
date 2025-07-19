@@ -33,6 +33,14 @@ class AppConfig {
   static bool get hasDevTokens =>
       devAccessToken.isNotEmpty && devRefreshToken.isNotEmpty;
 
+  // Offline mode helpers
+  static bool get isOfflineMode => _getEnv('OFFLINE_MODE') == 'true';
+  static bool get isWebPlatform => kIsWeb;
+  static bool get isDesktopPlatform =>
+      !kIsWeb && (Platform.isLinux || Platform.isMacOS || Platform.isWindows);
+  static bool get isMobilePlatform =>
+      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
   // Get API endpoints
   static String get authRegisterEndpoint => '$apiBaseUrl/register';
   static String get authLoginEndpoint => '$apiBaseUrl/login';
