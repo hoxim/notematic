@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 /// TokenService for managing JWT tokens in SharedPreferences
 class TokenService {
@@ -32,7 +33,35 @@ class TokenService {
 
   Future<bool> isLoggedIn() async {
     final token = await getToken();
-    return token != null && token.isNotEmpty;
+    if (token == null || token.isEmpty) {
+      return false;
+    }
+
+    // Check if token is expired
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) {
+        return false;
+      }
+
+      final payload = parts[1];
+      final normalized = base64Url.normalize(payload);
+      final resp = utf8.decode(base64Url.decode(normalized));
+      final payloadMap = json.decode(resp);
+
+      final exp = payloadMap['exp'];
+      if (exp == null) {
+        return false;
+      }
+
+      final expiry = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      final now = DateTime.now();
+
+      // Token is valid if it expires in more than 5 minutes
+      return expiry.isAfter(now.add(const Duration(minutes: 5)));
+    } catch (e) {
+      return false;
+    }
   }
 
   Future<void> saveUserEmail(String email) async {

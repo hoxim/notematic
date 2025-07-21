@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'src/services/token_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'src/services/logger_service.dart';
 import 'src/services/api_service.dart';
 import 'src/screens/home_screen.dart';
@@ -8,6 +8,8 @@ import 'src/screens/create_note_screen.dart';
 import 'src/config/app_config.dart';
 import 'src/screens/login_screen.dart';
 import 'src/screens/register_screen.dart';
+import 'src/providers/providers.dart';
+import 'src/services/unified_storage_service.dart';
 
 // ObjectBox will be initialized when needed by the services
 
@@ -41,23 +43,23 @@ Future<void> main() async {
   // Initialize platform-specific services
   // (This will only initialize ObjectBox on non-web platforms)
   logger.info('Initializing platform services');
-  // ObjectBox will be initialized when needed by the services
+  await UnifiedStorageService().initialize();
 
   logger.info('About to run app');
-  runApp(const MyApp());
+  runApp(const ProviderScope(child: MyApp()));
   logger.info('App started');
 }
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-class MyApp extends StatefulWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  State<MyApp> createState() => _MyAppState();
+  ConsumerState<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends ConsumerState<MyApp> {
   ThemeMode _themeMode = ThemeMode.system;
 
   void _toggleTheme() {
@@ -101,15 +103,14 @@ class _MyAppState extends State<MyApp> {
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
-        '/home': (context) =>
-            HomeScreen(onToggleTheme: _toggleTheme, themeMode: _themeMode),
+        '/home': (context) => const HomeScreen(),
         '/create-note': (context) => const CreateNoteScreen(),
       },
     );
   }
 }
 
-class AuthWrapper extends StatefulWidget {
+class AuthWrapper extends ConsumerStatefulWidget {
   final VoidCallback onToggleTheme;
   final ThemeMode themeMode;
   const AuthWrapper({
@@ -119,25 +120,48 @@ class AuthWrapper extends StatefulWidget {
   });
 
   @override
-  State<AuthWrapper> createState() => _AuthWrapperState();
+  ConsumerState<AuthWrapper> createState() => _AuthWrapperState();
 }
 
-class _AuthWrapperState extends State<AuthWrapper> {
+class _AuthWrapperState extends ConsumerState<AuthWrapper> {
   bool _isLoading = true;
   bool _isLoggedIn = false;
-  final _logger = LoggerService();
+  late final LoggerService _logger;
 
   @override
   void initState() {
     super.initState();
+    _logger = ref.read(loggerServiceProvider);
     _checkAuthStatus();
   }
 
   Future<void> _checkAuthStatus() async {
     _logger.info('Starting auth check...');
     try {
-      final isLoggedIn = await TokenService().isLoggedIn();
-      _logger.info('Auth check result: $isLoggedIn');
+      final tokenService = ref.read(tokenServiceProvider);
+      final apiService = ref.read(apiServiceProvider);
+
+      // Check if token exists and is valid
+      final isLoggedIn = await tokenService.isLoggedIn();
+      _logger.info('Token check result: $isLoggedIn');
+
+      if (isLoggedIn) {
+        // Try to validate token with API
+        try {
+          await apiService
+              .initialize(); // This will check and refresh token if needed
+          _logger.info('Token validation successful');
+        } catch (e) {
+          _logger.warning('Token validation failed: $e');
+          // If token validation fails, clear token and force logout
+          await tokenService.clearToken();
+          setState(() {
+            _isLoggedIn = false;
+            _isLoading = false;
+          });
+          return;
+        }
+      }
 
       setState(() {
         _isLoggedIn = isLoggedIn;
@@ -159,11 +183,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    return _isLoggedIn
-        ? HomeScreen(
-            onToggleTheme: widget.onToggleTheme,
-            themeMode: widget.themeMode,
-          )
-        : const LoginScreen();
+    return _isLoggedIn ? const HomeScreen() : const LoginScreen();
   }
 }

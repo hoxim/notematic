@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/providers.dart';
 
-class UserProfileMenu extends StatelessWidget {
-  final String? userEmail;
+class UserProfileMenu extends ConsumerWidget {
   final VoidCallback onProfileTap;
   final VoidCallback onSettingsTap;
   final VoidCallback onAboutTap;
@@ -9,7 +10,6 @@ class UserProfileMenu extends StatelessWidget {
 
   const UserProfileMenu({
     super.key,
-    required this.userEmail,
     required this.onProfileTap,
     required this.onSettingsTap,
     required this.onAboutTap,
@@ -17,7 +17,10 @@ class UserProfileMenu extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userState = ref.watch(userProvider);
+    final userEmail = userState.email;
+
     return PopupMenuButton<String>(
       offset: const Offset(0, 50),
       child: Padding(
@@ -28,8 +31,8 @@ class UserProfileMenu extends StatelessWidget {
             CircleAvatar(
               backgroundColor: Theme.of(context).colorScheme.primary,
               child: Text(
-                userEmail != null && userEmail!.isNotEmpty
-                    ? userEmail![0].toUpperCase()
+                userEmail != null && userEmail.isNotEmpty
+                    ? userEmail[0].toUpperCase()
                     : 'U',
                 style: const TextStyle(
                   color: Colors.white,
@@ -64,7 +67,8 @@ class UserProfileMenu extends StatelessWidget {
               Text(
                 'Signed in',
                 style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                   fontSize: 12,
                 ),
               ),

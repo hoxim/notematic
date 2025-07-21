@@ -1,25 +1,34 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/api_service.dart';
+import '../providers/providers.dart';
 import '../config/env_config.dart';
 
-class RegisterScreen extends StatefulWidget {
+class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
 
   @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
+  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
+class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
-  final ApiService _apiService = ApiService();
+  late final ApiService _apiService;
 
   // API status
   String _apiStatus = 'checking';
   bool _isCheckingApi = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _apiService = ref.read(apiServiceProvider);
+    _checkApiStatus();
+  }
 
   Future<void> _checkApiStatus() async {
     if (_isCheckingApi) return;
@@ -69,12 +78,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   // Google login temporarily disabled.
-
-  @override
-  void initState() {
-    super.initState();
-    _checkApiStatus();
-  }
 
   @override
   void dispose() {
@@ -151,9 +154,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       onPressed: _isLoading
                           ? null
                           : () => _register(
-                              _emailController.text,
-                              _passwordController.text,
-                            ),
+                                _emailController.text,
+                                _passwordController.text,
+                              ),
                       child: _isLoading
                           ? const CircularProgressIndicator()
                           : const Text('Register'),
@@ -177,7 +180,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             const SizedBox(width: 4),
             Text(
-              'API: 27${_apiStatus == 'up' ? 'up' : 'down'}',
+              'API: ${_apiStatus == 'up' ? 'up' : 'down'}',
               style: TextStyle(
                 fontSize: 12,
                 color: _apiStatus == 'up' ? Colors.green : Colors.red,

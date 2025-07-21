@@ -1,149 +1,162 @@
-import '../models/note_local.dart';
-import '../models/notebook_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'logger_service.dart';
 
-class SimpleLocalStorageService {
+/// Simple local storage service using SharedPreferences
+/// Provides a simple interface for storing key-value pairs
+class SimpleLocalStorage {
   final LoggerService _logger = LoggerService();
 
-  // In-memory storage for now
-  static final List<NoteLocal> _notes = [];
-  static final List<NotebookLocal> _notebooks = [];
-
-  // Note operations
-  Future<void> saveNote(NoteLocal note) async {
-    // Remove existing note with same UUID
-    _notes.removeWhere((n) => n.uuid == note.uuid);
-    _notes.add(note);
-    _logger.info('Saved note locally: ${note.title}');
-  }
-
-  Future<List<NoteLocal>> getAllNotes() async {
-    return List.from(_notes);
-  }
-
-  Future<List<NoteLocal>> getNotesForNotebook(String notebookUuid) async {
-    return _notes.where((note) => note.notebookUuid == notebookUuid).toList();
-  }
-
-  Future<List<NoteLocal>> getDirtyNotes() async {
-    return _notes.where((note) => note.isDirty).toList();
-  }
-
-  Future<NoteLocal?> getNoteByUuid(String uuid) async {
+  /// Get boolean value
+  Future<bool?> getBool(String key) async {
     try {
-      return _notes.firstWhere((note) => note.uuid == uuid);
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(key);
     } catch (e) {
+      _logger.error('Failed to get bool for key $key: $e');
       return null;
     }
   }
 
-  Future<void> deleteNote(String uuid) async {
-    _notes.removeWhere((note) => note.uuid == uuid);
-    _logger.info('Deleted note locally: $uuid');
-  }
-
-  // Notebook operations
-  Future<void> saveNotebook(NotebookLocal notebook) async {
-    // Remove existing notebook with same UUID
-    _notebooks.removeWhere((n) => n.uuid == notebook.uuid);
-    _notebooks.add(notebook);
-    _logger.info('Saved notebook locally: ${notebook.name}');
-  }
-
-  Future<List<NotebookLocal>> getAllNotebooks() async {
-    return List.from(_notebooks);
-  }
-
-  Future<List<NotebookLocal>> getDirtyNotebooks() async {
-    return _notebooks.where((notebook) => notebook.isDirty).toList();
-  }
-
-  Future<NotebookLocal?> getNotebookByUuid(String uuid) async {
+  /// Set boolean value
+  Future<bool> setBool(String key, bool value) async {
     try {
-      return _notebooks.firstWhere((notebook) => notebook.uuid == uuid);
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setBool(key, value);
     } catch (e) {
+      _logger.error('Failed to set bool for key $key: $e');
+      return false;
+    }
+  }
+
+  /// Get string value
+  Future<String?> getString(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(key);
+    } catch (e) {
+      _logger.error('Failed to get string for key $key: $e');
       return null;
     }
   }
 
-  Future<void> deleteNotebook(String uuid) async {
-    _notebooks.removeWhere((notebook) => notebook.uuid == uuid);
-    _logger.info('Deleted notebook locally: $uuid');
-  }
-
-  // Sync operations
-  Future<void> syncNotesToLocal(List<Map<String, dynamic>> apiNotes) async {
-    for (final apiNote in apiNotes) {
-      final note = NoteLocal.fromApiMap(apiNote);
-      note.isOffline = false; // Mark as synced from server
-      note.isDirty = false;
-      await saveNote(note);
+  /// Set string value
+  Future<bool> setString(String key, String value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setString(key, value);
+    } catch (e) {
+      _logger.error('Failed to set string for key $key: $e');
+      return false;
     }
-    _logger.info('Synced ${apiNotes.length} notes from API to local');
   }
 
-  Future<void> syncNotebooksToLocal(
-      List<Map<String, dynamic>> apiNotebooks) async {
-    for (final apiNotebook in apiNotebooks) {
-      final notebook = NotebookLocal.fromApiMap(apiNotebook);
-      notebook.isOffline = false; // Mark as synced from server
-      notebook.isDirty = false;
-      await saveNotebook(notebook);
+  /// Get int value
+  Future<int?> getInt(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(key);
+    } catch (e) {
+      _logger.error('Failed to get int for key $key: $e');
+      return null;
     }
-    _logger.info('Synced ${apiNotebooks.length} notebooks from API to local');
   }
 
-  // Get all data (local + offline)
-  Future<List<NoteLocal>> getAllNotesWithOffline() async {
-    return List.from(_notes);
+  /// Set int value
+  Future<bool> setInt(String key, int value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setInt(key, value);
+    } catch (e) {
+      _logger.error('Failed to set int for key $key: $e');
+      return false;
+    }
   }
 
-  Future<List<NotebookLocal>> getAllNotebooksWithOffline() async {
-    return List.from(_notebooks);
+  /// Get double value
+  Future<double?> getDouble(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getDouble(key);
+    } catch (e) {
+      _logger.error('Failed to get double for key $key: $e');
+      return null;
+    }
   }
 
-  // Clear all data
-  Future<void> clearAllData() async {
-    _notes.clear();
-    _notebooks.clear();
-    _logger.info('Cleared all local data');
+  /// Set double value
+  Future<bool> setDouble(String key, double value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setDouble(key, value);
+    } catch (e) {
+      _logger.error('Failed to set double for key $key: $e');
+      return false;
+    }
   }
 
-  // Get sync status
-  Future<Map<String, int>> getSyncStatus() async {
-    final totalNotes = _notes.length;
-    final dirtyNotes = _notes.where((note) => note.isDirty).length;
-    final totalNotebooks = _notebooks.length;
-    final dirtyNotebooks =
-        _notebooks.where((notebook) => notebook.isDirty).length;
-
-    return {
-      'totalNotes': totalNotes,
-      'dirtyNotes': dirtyNotes,
-      'totalNotebooks': totalNotebooks,
-      'dirtyNotebooks': dirtyNotebooks,
-    };
+  /// Get string list
+  Future<List<String>?> getStringList(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getStringList(key);
+    } catch (e) {
+      _logger.error('Failed to get string list for key $key: $e');
+      return null;
+    }
   }
 
-  // Add some test data
-  Future<void> addTestData() async {
-    // Add test notebook
-    final testNotebook = NotebookLocal.createOffline(
-      name: 'Test Offline Notebook',
-      description: 'Created offline for testing',
-      color: '#FF5722',
-    );
-    await saveNotebook(testNotebook);
+  /// Set string list
+  Future<bool> setStringList(String key, List<String> value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.setStringList(key, value);
+    } catch (e) {
+      _logger.error('Failed to set string list for key $key: $e');
+      return false;
+    }
+  }
 
-    // Add test note
-    final testNote = NoteLocal.createOffline(
-      title: 'Test Offline Note',
-      content:
-          'This is a test note created offline to demonstrate the offline indicator.',
-      notebookUuid: testNotebook.uuid,
-    );
-    await saveNote(testNote);
+  /// Remove key
+  Future<bool> remove(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.remove(key);
+    } catch (e) {
+      _logger.error('Failed to remove key $key: $e');
+      return false;
+    }
+  }
 
-    _logger.info('Added test offline data');
+  /// Clear all data
+  Future<bool> clear() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.clear();
+    } catch (e) {
+      _logger.error('Failed to clear all data: $e');
+      return false;
+    }
+  }
+
+  /// Check if key exists
+  Future<bool> containsKey(String key) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.containsKey(key);
+    } catch (e) {
+      _logger.error('Failed to check if key $key exists: $e');
+      return false;
+    }
+  }
+
+  /// Get all keys
+  Future<Set<String>> getKeys() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getKeys();
+    } catch (e) {
+      _logger.error('Failed to get all keys: $e');
+      return {};
+    }
   }
 }

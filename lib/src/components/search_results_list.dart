@@ -1,20 +1,59 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/providers.dart';
 
-class SearchResultsList extends StatelessWidget {
-  final List<Map<String, dynamic>> searchResults;
-  final String searchQuery;
+class SearchResultsList extends ConsumerWidget {
   final Function(Map<String, dynamic>) onNoteTap;
 
   const SearchResultsList({
     super.key,
-    required this.searchResults,
-    required this.searchQuery,
     required this.onNoteTap,
   });
 
   @override
-  Widget build(BuildContext context) {
-    if (searchResults.isEmpty) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final searchState = ref.watch(searchProvider);
+
+    if (searchState.isSearching) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (searchState.query.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.search,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Search for notes',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.7),
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Enter keywords to find your notes',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.5),
+                  ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (searchState.results.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -26,17 +65,23 @@ class SearchResultsList extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'No notes found for "$searchQuery"',
+              'No notes found for "${searchState.query}"',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              ),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.7),
+                  ),
             ),
             const SizedBox(height: 8),
             Text(
               'Try different keywords',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-              ),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.5),
+                  ),
             ),
           ],
         ),
@@ -44,10 +89,11 @@ class SearchResultsList extends StatelessWidget {
     }
 
     return ListView.builder(
-      itemCount: searchResults.length,
+      itemCount: searchState.results.length,
       itemBuilder: (context, index) {
-        final note = searchResults[index];
-        final notebookName = note['notebookName'] as String? ?? 'Unknown Notebook';
+        final note = searchState.results[index];
+        final notebookName =
+            note['notebookName'] as String? ?? 'Unknown Notebook';
 
         return Card(
           margin: const EdgeInsets.only(bottom: 8),

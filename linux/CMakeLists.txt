@@ -4,6 +4,7 @@ project(runner LANGUAGES CXX)
 
 # Suppress ObjectBox CMake warnings
 cmake_policy(SET CMP0169 OLD)
+cmake_policy(SET CMP0079 NEW)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/providers.dart';
 
-class CreateFAB extends StatelessWidget {
-  final bool isExpanded;
+class CreateFAB extends ConsumerWidget {
   final Animation<double> animation;
   final VoidCallback onCreateNote;
   final VoidCallback onCreateNotebook;
@@ -9,7 +10,6 @@ class CreateFAB extends StatelessWidget {
 
   const CreateFAB({
     super.key,
-    required this.isExpanded,
     required this.animation,
     required this.onCreateNote,
     required this.onCreateNotebook,
@@ -17,7 +17,10 @@ class CreateFAB extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isExpanded = ref.watch(fabExpandedProvider);
+    print('CreateFAB build, isExpanded: $isExpanded');
+
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -27,7 +30,11 @@ class CreateFAB extends StatelessWidget {
             child: ScaleTransition(
               scale: animation,
               child: FloatingActionButton.extended(
-                onPressed: onCreateNotebook,
+                onPressed: () {
+                  print('Create notebook pressed!');
+                  ref.read(fabExpandedProvider.notifier).toggle();
+                  onCreateNotebook();
+                },
                 heroTag: 'createNotebook',
                 backgroundColor: Theme.of(context).colorScheme.secondary,
                 foregroundColor: Theme.of(context).colorScheme.onSecondary,
@@ -42,7 +49,11 @@ class CreateFAB extends StatelessWidget {
             child: ScaleTransition(
               scale: animation,
               child: FloatingActionButton.extended(
-                onPressed: onCreateNote,
+                onPressed: () {
+                  print('Create note pressed!');
+                  ref.read(fabExpandedProvider.notifier).toggle();
+                  onCreateNote();
+                },
                 heroTag: 'createNote',
                 backgroundColor: Theme.of(context).colorScheme.primary,
                 foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -52,7 +63,11 @@ class CreateFAB extends StatelessWidget {
             ),
           ),
         FloatingActionButton(
-          onPressed: onToggle,
+          onPressed: () {
+            print('FAB pressed! isExpanded: $isExpanded');
+            ref.read(fabExpandedProvider.notifier).toggle();
+            onToggle();
+          },
           heroTag: 'mainFab',
           child: AnimatedRotation(
             turns: isExpanded ? 0.125 : 0, // 45 degrees

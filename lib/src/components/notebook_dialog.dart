@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../utils/note_colors.dart';
+import '../providers/providers.dart';
 
-class NotebookDialog extends StatefulWidget {
+class NotebookDialog extends ConsumerStatefulWidget {
   final Function(String name, String? description, String color) onCreate;
 
   const NotebookDialog({
@@ -10,13 +12,19 @@ class NotebookDialog extends StatefulWidget {
   });
 
   @override
-  State<NotebookDialog> createState() => _NotebookDialogState();
+  ConsumerState<NotebookDialog> createState() => _NotebookDialogState();
 }
 
-class _NotebookDialogState extends State<NotebookDialog> {
+class _NotebookDialogState extends ConsumerState<NotebookDialog> {
   final nameController = TextEditingController();
   final descriptionController = TextEditingController();
-  String selectedColor = '#2196F3'; // Default blue
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize with default color
+    ref.read(notebookFormProvider.notifier).setColor('#2196F3');
+  }
 
   @override
   void dispose() {
@@ -27,6 +35,8 @@ class _NotebookDialogState extends State<NotebookDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final formState = ref.watch(notebookFormProvider);
+
     return AlertDialog(
       title: const Text('Create New Notebook'),
       content: SingleChildScrollView(
@@ -41,6 +51,9 @@ class _NotebookDialogState extends State<NotebookDialog> {
                 hintText: 'Enter notebook name...',
               ),
               autofocus: true,
+              onChanged: (value) {
+                ref.read(notebookFormProvider.notifier).setName(value);
+              },
             ),
             const SizedBox(height: 16),
             TextField(
@@ -51,6 +64,9 @@ class _NotebookDialogState extends State<NotebookDialog> {
                 hintText: 'Enter description...',
               ),
               maxLines: 2,
+              onChanged: (value) {
+                ref.read(notebookFormProvider.notifier).setDescription(value);
+              },
             ),
             const SizedBox(height: 16),
             const Text('Choose color:'),
@@ -62,13 +78,12 @@ class _NotebookDialogState extends State<NotebookDialog> {
                 final colors = entry.value;
                 final isDark = Theme.of(context).brightness == Brightness.dark;
                 final color = getNotebookColor(index, isDark);
-                final hexColor = '#${color.value.toRadixString(16).substring(2)}';
+                final hexColor =
+                    '#${color.value.toRadixString(16).substring(2)}';
 
                 return GestureDetector(
                   onTap: () {
-                    setState(() {
-                      selectedColor = hexColor;
-                    });
+                    ref.read(notebookFormProvider.notifier).setColor(hexColor);
                   },
                   child: Container(
                     width: 32,
@@ -76,7 +91,7 @@ class _NotebookDialogState extends State<NotebookDialog> {
                     decoration: BoxDecoration(
                       color: color,
                       border: Border.all(
-                        color: selectedColor == hexColor
+                        color: formState.color == hexColor
                             ? Colors.black
                             : Colors.transparent,
                         width: 2,
@@ -96,26 +111,18 @@ class _NotebookDialogState extends State<NotebookDialog> {
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: () {
-            if (nameController.text.trim().isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Please enter a notebook name'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-              return;
-            }
-
-            Navigator.of(context).pop();
-            widget.onCreate(
-              nameController.text.trim(),
-              descriptionController.text.trim().isEmpty
-                  ? null
-                  : descriptionController.text.trim(),
-              selectedColor,
-            );
-          },
+          onPressed: ref.read(notebookFormProvider.notifier).isValid
+              ? () {
+                  Navigator.of(context).pop();
+                  widget.onCreate(
+                    formState.name,
+                    formState.description?.isEmpty == true
+                        ? null
+                        : formState.description,
+                    formState.color ?? '#2196F3',
+                  );
+                }
+              : null,
           child: const Text('Create'),
         ),
       ],

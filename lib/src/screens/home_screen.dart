@@ -1,644 +1,639 @@
 import 'package:flutter/material.dart';
-import '../services/logger_service.dart';
-import '../services/token_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../components/user_profile_menu.dart';
-import '../components/notebook_dialog.dart';
-import '../components/app_about_dialog.dart';
-import '../components/sync_toggle.dart';
-import '../components/search_bar.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/providers.dart';
 import '../components/notes_list_view.dart';
+import '../components/notebooks_list_view.dart';
+import '../components/search_bar.dart';
 import '../components/search_results_list.dart';
+import '../components/user_profile_menu.dart';
 import '../components/create_fab.dart';
-import '../services/api_service.dart';
-import '../services/sync_service.dart';
+import '../components/sync_toggle.dart';
+import 'note_view_screen.dart';
+import '../services/unified_sync_service.dart';
+import 'create_note_screen.dart';
 
-const noteColors = [
-  // Each entry: {'light': Color, 'dark': Color}
-  {'light': Color(0xFFFFF59D), 'dark': Color(0xFF7E7E3A)}, // Yellow
-  {'light': Color(0xFF90CAF9), 'dark': Color(0xFF274472)}, // Blue
-  {'light': Color(0xFFA5D6A7), 'dark': Color(0xFF356859)}, // Green
-  {'light': Color(0xFFEF9A9A), 'dark': Color(0xFF7B3B3B)}, // Red
-  {'light': Color(0xFFCE93D8), 'dark': Color(0xFF5E366E)}, // Purple
-  {'light': Color(0xFFE0E0E0), 'dark': Color(0xFF424242)}, // Grey
-];
-
-Color getNotebookColor(int colorIndex, bool isDark) {
-  final idx = colorIndex % noteColors.length;
-  return isDark ? noteColors[idx]['dark']! : noteColors[idx]['light']!;
-}
-
-Color getTextColor(Color bg, bool isDark) {
-  // If background is dark, use white; if light, use black
-  return ThemeData.estimateBrightnessForColor(bg) == Brightness.dark
-      ? Colors.white
-      : Colors.black;
-}
-
-class HomeScreen extends StatefulWidget {
-  final VoidCallback onToggleTheme;
-  final ThemeMode themeMode;
-  const HomeScreen({
-    super.key,
-    required this.onToggleTheme,
-    required this.themeMode,
-  });
+/// Home screen that displays notes and notebooks
+/// Uses unified models and providers for state management
+class HomeScreen extends ConsumerStatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  String? _userEmail;
-  bool _defaultNotebookChecked = false; // Prevents multiple creations
-  List<dynamic> _notebooks = [];
-  Map<String, List<dynamic>> _notebookNotes = {};
-  bool _isLoading = true;
-  bool isSyncEnabled = true; // global sync flag
-
-  // FAB animation
-  late AnimationController _fabAnimationController;
-  late Animation<double> _fabAnimation;
-  bool _isFabExpanded = false;
-
-  // Search functionality
-  final _searchController = TextEditingController();
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  bool _showNotebooks = false;
   String _searchQuery = '';
-  List<Map<String, dynamic>> _searchResults = [];
-  bool _isSearching = false;
-
-  // About dialog state
-
-  final LoggerService _logger = LoggerService();
-  final SyncService _syncService = SyncService();
+  final _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _fabAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _fabAnimation = CurvedAnimation(
-      parent: _fabAnimationController,
-      curve: Curves.easeInOut,
-    );
-    _initServices();
-    _loadSyncFlag();
-  }
-
-  Future<void> _initServices() async {
-    await _loadUserInfo();
+    _initializeServices();
   }
 
   @override
   void dispose() {
-    _fabAnimationController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadUserInfo() async {
+  /// Initialize unified services
+  Future<void> _initializeServices() async {
     try {
-      final userEmail = await TokenService().getUserId();
-      if (userEmail != null) {
-        setState(() {
-          _userEmail = userEmail;
-        });
-        _logger.info('User loaded:  [38;5;2m$_userEmail [0m');
-        if (!_defaultNotebookChecked) {
-          _defaultNotebookChecked = true;
-          // Default notebook creation is handled by SyncService
-        }
-        await _loadNotebooksAndNotes();
-      }
+      final syncService = ref.read(unifiedSyncServiceProvider);
+      await syncService.initialize();
     } catch (e) {
-      _logger.error('Failed to load user info: $e');
-    }
-  }
-
-  Future<void> _loadNotebooksAndNotes() async {
-    setState(() {
-      _isLoading = true;
-    });
-    try {
-      // Use SyncService to get all data with single sync
-      final allData = await _syncService.getAllDataWithSync();
-      final allNotes = allData['notes'] as List<dynamic>;
-      final allNotebooks = allData['notebooks'] as List<dynamic>;
-
-      _logger.info('Loaded notebooks: $allNotebooks');
-      _logger.info('Loaded notes: $allNotes');
-
-      // Group notes by notebook
-      Map<String, List<dynamic>> notesMap = {};
-      for (final notebook in allNotebooks) {
-        final notebookId = notebook.uuid;
-        final notesForNotebook =
-            allNotes.where((note) => note.notebookUuid == notebookId).toList();
-        notesMap[notebookId] = notesForNotebook;
-        _logger
-            .info('Notes for notebook $notebookId: ${notesForNotebook.length}');
-      }
-
-      setState(() {
-        _notebooks = allNotebooks;
-        _notebookNotes = notesMap;
-        _isLoading = false;
-      });
-      _logger.info('Final notebooks: $_notebooks');
-      _logger.info('Final notes map: $_notebookNotes');
-    } catch (e) {
-      _logger.error('Failed to load notebooks or notes: $e');
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _loadNotebooksAndNotesWithoutSync() async {
-    setState(() {
-      _isLoading = true;
-    });
-    try {
-      // Use SyncService to get all data without sync
-      final allNotes = await _syncService.getAllNotes();
-      final allNotebooks = await _syncService.getAllNotebooks();
-
-      _logger.info('Loaded notebooks without sync: $allNotebooks');
-      _logger.info('Loaded notes without sync: $allNotes');
-
-      // Group notes by notebook
-      Map<String, List<dynamic>> notesMap = {};
-      for (final notebook in allNotebooks) {
-        final notebookId = notebook.uuid;
-        final notesForNotebook =
-            allNotes.where((note) => note.notebookUuid == notebookId).toList();
-        notesMap[notebookId] = notesForNotebook;
-        _logger
-            .info('Notes for notebook $notebookId: ${notesForNotebook.length}');
-      }
-
-      setState(() {
-        _notebooks = allNotebooks;
-        _notebookNotes = notesMap;
-        _isLoading = false;
-      });
-      _logger.info('Final notebooks: $_notebooks');
-      _logger.info('Final notes map: $_notebookNotes');
-    } catch (e) {
-      _logger.error('Failed to load notebooks or notes: $e');
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _openNoteDetails(Map<String, dynamic> note) {
-    // Placeholder: show snackbar
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('Open note: ${note['title']}')));
-  }
-
-  void _toggleFab() {
-    setState(() {
-      _isFabExpanded = !_isFabExpanded;
-    });
-
-    if (_isFabExpanded) {
-      _fabAnimationController.forward();
-    } else {
-      _fabAnimationController.reverse();
-    }
-  }
-
-  void _createNote() {
-    _toggleFab();
-    if (_notebooks.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please create a notebook first'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
-    // Navigate to create note screen with first notebook selected
-    Navigator.of(context).pushNamed(
-      '/create-note',
-      arguments: {
-        'notebookId': _notebooks.first.uuid,
-      },
-    ).then((value) {
-      if (value == true) {
-        _loadNotebooksAndNotesWithoutSync();
-      }
-    });
-  }
-
-  void _createNotebook() {
-    _toggleFab();
-    _showCreateNotebookDialog();
-  }
-
-  void _showCreateNotebookDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return NotebookDialog(
-          onCreate: (name, description, color) async {
-            try {
-              _logger.info('Creating notebook via SyncService');
-              await _syncService.createNotebook(
-                name: name,
-                description: description,
-                color: color,
-              );
-
-              _logger.info('Notebook created successfully');
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Notebook created successfully!'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-              await _loadNotebooksAndNotesWithoutSync();
-            } catch (e) {
-              _logger.error('Failed to create notebook: $e');
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Failed to create notebook'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            }
-          },
-        );
-      },
-    );
-  }
-
-  void _performSearch(String query) {
-    setState(() {
-      _searchQuery = query;
-      _isSearching = query.isNotEmpty;
-    });
-
-    if (query.isEmpty) {
-      setState(() {
-        _searchResults = [];
-        _isSearching = false;
-      });
-      return;
-    }
-
-    // Search through all notes in all notebooks
-    List<Map<String, dynamic>> results = [];
-    for (final notebook in _notebooks) {
-      final notebookId = notebook.uuid;
-      final notes = _notebookNotes[notebookId] ?? [];
-      final notebookName = notebook.name ?? 'Unknown Notebook';
-
-      for (final note in notes) {
-        final title = note.title.toLowerCase();
-        final content = note.content.toLowerCase();
-        final searchLower = query.toLowerCase();
-
-        if (title.contains(searchLower) || content.contains(searchLower)) {
-          // Add notebook info to the note for display
-          final noteWithNotebook = note.toMap();
-          noteWithNotebook['notebookName'] = notebookName;
-          noteWithNotebook['notebookId'] = notebookId;
-          results.add(noteWithNotebook);
-        }
-      }
-    }
-
-    setState(() {
-      _searchResults = results;
-    });
-  }
-
-  void _clearSearch() {
-    setState(() {
-      _searchQuery = '';
-      _searchResults = [];
-      _isSearching = false;
-    });
-    _searchController.clear();
-  }
-
-  Future<void> _logout() async {
-    // Show confirmation dialog
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Logout'),
-          content: const Text('Are you sure you want to logout?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('Logout'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldLogout != true) return;
-
-    try {
-      await TokenService().clearToken();
-      _logger.info('User logged out');
-
-      if (mounted) {
-        Navigator.of(context).pushReplacementNamed('/login');
-      }
-    } catch (e) {
-      _logger.error('Failed to logout: $e');
-    }
-  }
-
-  void _showProfile() {
-    _logger.info('Profile button pressed');
-    // TODO: Navigate to profile screen
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Profile feature coming soon!')),
-    );
-  }
-
-  void _showSettings() {
-    _logger.info('Settings button pressed');
-    // TODO: Navigate to settings screen
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Settings feature coming soon!')),
-    );
-  }
-
-  void _showAboutDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) => const AppAboutDialog(),
-    );
-  }
-
-  Future<void> _loadSyncFlag() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      isSyncEnabled = prefs.getBool('isSyncEnabled') ?? false;
-    });
-  }
-
-  Future<void> _setSyncFlag(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isSyncEnabled', value);
-    setState(() {
-      isSyncEnabled = value;
-    });
-
-    // Clear online mode cache when sync settings change
-    _syncService.clearOnlineModeCache();
-  }
-
-  /// Check if sync is enabled and API is available
-  Future<bool> _isOfflineMode() async {
-    try {
-      // Check if sync is disabled
-      if (!isSyncEnabled) {
-        return true; // Offline mode when sync is disabled
-      }
-
-      // Check if API is available
-      final apiService = ApiService();
-      final isApiAvailable = await apiService.isApiAvailable();
-
-      return !isApiAvailable; // Offline mode when API is not available
-    } catch (e) {
-      _logger.error('Error checking offline mode: $e');
-      return true; // Default to offline mode on error
-    }
-  }
-
-  Future<void> _deleteNote(Map<String, dynamic> note) async {
-    try {
-      // Show confirmation dialog
-      final shouldDelete = await showDialog<bool>(
-        context: context,
-        builder: (BuildContext context) {
-          return AlertDialog(
-            title: const Text('Delete Note'),
-            content:
-                Text('Are you sure you want to delete "${note['title']}"?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text('Delete'),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (shouldDelete != true) return;
-
-      // Delete the note
-      await _syncService.deleteNote(note['id']);
-      _logger.info('Deleted note: ${note['title']}');
-
-      // Reload data without additional sync
-      await _loadNotebooksAndNotesWithoutSync();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Note "${note['title']}" deleted')),
-        );
-      }
-    } catch (e) {
-      _logger.error('Failed to delete note: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to delete note')),
-        );
-      }
-    }
-  }
-
-  Future<void> _syncNote(Map<String, dynamic> note) async {
-    try {
-      // Show loading indicator
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Synchronizing note...')),
-        );
-      }
-
-      // Sync the note
-      await _syncService.syncNoteToApi(note['id']);
-      _logger.info('Synced note: ${note['title']}');
-
-      // Reload data without additional sync
-      await _loadNotebooksAndNotesWithoutSync();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Note "${note['title']}" synchronized')),
-        );
-      }
-    } catch (e) {
-      _logger.error('Failed to sync note: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to synchronize note')),
-        );
-      }
-    }
-  }
-
-  Future<void> _syncNow() async {
-    try {
-      _logger.info('Manual sync requested');
-
-      // Show loading indicator
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Synchronizing...')),
-        );
-      }
-
-      // Perform full sync
-      await _syncService.fullSync();
-
-      // Reload data without additional sync
-      await _loadNotebooksAndNotesWithoutSync();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sync completed'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      _logger.error('Manual sync failed: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Sync failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      // Handle initialization error
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final notesAsync = ref.watch(notesProvider);
+    final notebooksAsync = ref.watch(notebooksProvider);
+    final syncEnabledAsync = ref.watch(syncEnabledProvider);
+    final searchState = ref.watch(searchProvider);
+    final fabExpanded = ref.watch(fabExpandedProvider);
+    final userState = ref.watch(userProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notematic'),
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          SyncToggle(
-            value: isSyncEnabled,
-            onChanged: _setSyncFlag,
-            onSyncNow: _syncNow,
+          // Search bar
+          Expanded(
+            child: NotesSearchBar(
+              controller: _searchController,
+            ),
           ),
-          IconButton(
-            onPressed: widget.onToggleTheme,
-            icon: widget.themeMode == ThemeMode.dark
-                ? const Icon(Icons.wb_sunny_outlined)
-                : const Icon(Icons.nightlight_round),
-            tooltip:
-                widget.themeMode == ThemeMode.dark ? 'Light mode' : 'Dark mode',
+          // Sync toggle
+          SyncToggle(
+            onSyncNow: () async {
+              try {
+                final syncService = ref.read(unifiedSyncServiceProvider);
+                await syncService.fullSync();
+
+                // Refresh data after sync
+                ref.read(notesProvider.notifier).refresh();
+                ref.read(notebooksProvider.notifier).refresh();
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Sync completed successfully')),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Sync failed: $e')),
+                );
+              }
+            },
           ),
           // User profile menu
           UserProfileMenu(
-            userEmail: _userEmail,
-            onProfileTap: _showProfile,
-            onSettingsTap: _showSettings,
-            onAboutTap: _showAboutDialog,
-            onLogoutTap: _logout,
+            onProfileTap: () {
+              // Handle profile tap
+            },
+            onSettingsTap: () {
+              // Handle settings tap
+            },
+            onAboutTap: () {
+              // Handle about tap
+            },
+            onLogoutTap: () {
+              ref.read(userProvider.notifier).logout();
+            },
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Search field at the top
-                  NotesSearchBar(
-                    controller: _searchController,
-                    onChanged: _performSearch,
-                    onClear: _clearSearch,
-                    searchQuery: _searchQuery,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Welcome, ${_userEmail ?? 'User'}!',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: 24),
-                  Expanded(
-                    child: _isSearching
-                        ? SearchResultsList(
-                            searchResults: _searchResults,
-                            searchQuery: _searchQuery,
-                            onNoteTap: _openNoteDetails,
-                          )
-                        : NotesListView(
-                            notes: _getAllNotes(),
-                            onNoteTap: _openNoteDetails,
-                            onDeleteNote: _deleteNote,
-                            onSyncNote: _syncNote,
-                          ),
-                  ),
-                ],
-              ),
-            ),
+      body: _buildBody(notesAsync, notebooksAsync, searchState),
       floatingActionButton: CreateFAB(
-        isExpanded: _isFabExpanded,
-        animation: _fabAnimation,
-        onToggle: _toggleFab,
-        onCreateNote: _createNote,
-        onCreateNotebook: _createNotebook,
+        animation: const AlwaysStoppedAnimation(1.0),
+        onCreateNote: () => _showCreateNoteDialog(context),
+        onCreateNotebook: () => _showCreateNotebookDialog(context),
+        onToggle: () {}, // usunięto podwójne toggle
       ),
     );
   }
 
-  List<Map<String, dynamic>> _getAllNotes() {
-    List<Map<String, dynamic>> allNotes = [];
-    for (final notebook in _notebooks) {
-      final notebookId = notebook.uuid;
-      final notebookName = notebook.name ?? 'Unknown Notebook';
-      final notes = _notebookNotes[notebookId] ?? [];
-      for (final note in notes) {
-        final noteWithNotebook = note.toMap();
-        noteWithNotebook['notebookName'] = notebookName;
-        noteWithNotebook['notebookId'] = notebookId;
-        allNotes.add(noteWithNotebook);
+  /// Build the main body content
+  Widget _buildBody(
+    AsyncValue<List<Map<String, dynamic>>> notesAsync,
+    AsyncValue<List<Map<String, dynamic>>> notebooksAsync,
+    SearchState searchState,
+  ) {
+    // Show search results if searching
+    if (searchState.query.isNotEmpty) {
+      return SearchResultsList(
+        onNoteTap: (note) {
+          // Handle note tap
+        },
+      );
+    }
+
+    // Show loading state
+    if (notesAsync.isLoading || notebooksAsync.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    // Show error state
+    if (notesAsync.hasError || notebooksAsync.hasError) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            const SizedBox(height: 16),
+            Text(
+              'Error loading data',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              notesAsync.error?.toString() ??
+                  notebooksAsync.error?.toString() ??
+                  'Unknown error',
+              style: Theme.of(context).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                ref.read(notesProvider.notifier).refresh();
+                ref.read(notebooksProvider.notifier).refresh();
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Show main content
+    return Column(
+      children: [
+        // Toggle buttons
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => setState(() => _showNotebooks = false),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        !_showNotebooks ? Theme.of(context).primaryColor : null,
+                    foregroundColor: !_showNotebooks ? Colors.white : null,
+                  ),
+                  child: const Text('Notes'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => setState(() => _showNotebooks = true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        _showNotebooks ? Theme.of(context).primaryColor : null,
+                    foregroundColor: _showNotebooks ? Colors.white : null,
+                  ),
+                  child: const Text('Notebooks'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Content
+        Expanded(
+          child: _showNotebooks
+              ? NotebooksListView(
+                  onNotebookTap: (notebook) {
+                    // Handle notebook selection
+                    setState(() => _showNotebooks = false);
+                  },
+                  onEditNotebook: (notebook) {
+                    // Handle notebook edit
+                    _showEditNotebookDialog(context, notebook);
+                  },
+                  onDeleteNotebook: (notebook) {
+                    // Handle notebook delete
+                    _showDeleteNotebookDialog(context, notebook);
+                  },
+                  onSyncNotebook: (notebook) {
+                    // Handle notebook sync
+                    _syncNotebook(context, notebook);
+                  },
+                )
+              : NotesListView(
+                  onNoteTap: (note) {
+                    // Navigate to note view screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => NoteViewScreen(note: note),
+                      ),
+                    );
+                  },
+                  onDeleteNote: (note) {
+                    // Handle note delete
+                    ref.read(notesProvider.notifier).deleteNote(note['id']);
+                  },
+                  onSyncNote: (note) {
+                    // Handle note sync
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  /// Show create note dialog
+  void _showCreateNoteDialog(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const CreateNoteScreen()),
+    );
+  }
+
+  /// Show create notebook dialog
+  void _showCreateNotebookDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const CreateNotebookDialog(),
+    );
+  }
+
+  /// Show edit notebook dialog
+  void _showEditNotebookDialog(
+      BuildContext context, Map<String, dynamic> notebook) {
+    showDialog(
+      context: context,
+      builder: (context) => CreateNotebookDialog(
+        notebookToEdit: notebook,
+      ),
+    );
+  }
+
+  /// Show delete notebook dialog
+  void _showDeleteNotebookDialog(
+      BuildContext context, Map<String, dynamic> notebook) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Notebook'),
+        content: Text(
+            'Are you sure you want to delete "${notebook['name']}"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              ref
+                  .read(notebooksProvider.notifier)
+                  .deleteNotebook(notebook['id']);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Sync notebook
+  void _syncNotebook(BuildContext context, Map<String, dynamic> notebook) {
+    // TODO: Implement notebook sync
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Notebook sync functionality coming soon')),
+    );
+  }
+}
+
+/// Dialog for creating a new note
+class CreateNoteDialog extends ConsumerStatefulWidget {
+  const CreateNoteDialog({super.key});
+
+  @override
+  ConsumerState<CreateNoteDialog> createState() => _CreateNoteDialogState();
+}
+
+class _CreateNoteDialogState extends ConsumerState<CreateNoteDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _contentController = TextEditingController();
+  String? _selectedNotebookUuid;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _contentController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final notebooksAsync = ref.watch(notebooksProvider);
+    final formState = ref.watch(createNoteFormProvider);
+    final formNotifier = ref.read(createNoteFormProvider.notifier);
+
+    return AlertDialog(
+      title: const Text('Create Note'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _titleController,
+              decoration: const InputDecoration(
+                labelText: 'Title',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Please enter a title';
+                }
+                return null;
+              },
+              onChanged: (value) {
+                ref.read(createNoteFormProvider.notifier).setTitle(value);
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _contentController,
+              decoration: const InputDecoration(
+                labelText: 'Content',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Please enter content';
+                }
+                return null;
+              },
+              onChanged: (value) {
+                ref.read(createNoteFormProvider.notifier).setContent(value);
+              },
+            ),
+            const SizedBox(height: 16),
+            // Notebook selection dropdown
+            if (notebooksAsync.hasValue)
+              DropdownButtonFormField<String>(
+                value: _selectedNotebookUuid,
+                decoration: const InputDecoration(
+                  labelText: 'Notebook',
+                  border: OutlineInputBorder(),
+                ),
+                items: notebooksAsync.value!.map((notebook) {
+                  return DropdownMenuItem<String>(
+                    value: notebook['id'] as String,
+                    child: Text(notebook['name'] as String? ?? 'Untitled'),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedNotebookUuid = value;
+                  });
+                  ref
+                      .read(createNoteFormProvider.notifier)
+                      .setNotebookUuid(value ?? '');
+                },
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please select a notebook';
+                  }
+                  return null;
+                },
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: formNotifier.isValid ? _createNote : null,
+          child: const Text('Create'),
+        ),
+      ],
+    );
+  }
+
+  /// Create the note
+  void _createNote() async {
+    if (_formKey.currentState!.validate()) {
+      try {
+        await ref.read(notesProvider.notifier).createNote(
+              title: _titleController.text.trim(),
+              content: _contentController.text.trim(),
+              notebookUuid: _selectedNotebookUuid!,
+            );
+
+        ref.read(createNoteFormProvider.notifier).reset();
+        Navigator.of(context).pop();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Note created successfully')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create note: $e')),
+        );
       }
     }
-    return allNotes;
+  }
+}
+
+/// Dialog for creating a new notebook
+class CreateNotebookDialog extends ConsumerStatefulWidget {
+  final Map<String, dynamic>? notebookToEdit;
+
+  const CreateNotebookDialog({
+    super.key,
+    this.notebookToEdit,
+  });
+
+  @override
+  ConsumerState<CreateNotebookDialog> createState() =>
+      _CreateNotebookDialogState();
+}
+
+class _CreateNotebookDialogState extends ConsumerState<CreateNotebookDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  String _selectedColor = '#2196F3';
+
+  @override
+  void initState() {
+    super.initState();
+
+    // If editing a notebook, populate fields with existing data
+    if (widget.notebookToEdit != null) {
+      _nameController.text = widget.notebookToEdit!['name'] ?? '';
+      _descriptionController.text = widget.notebookToEdit!['description'] ?? '';
+
+      // Validate color exists in dropdown options
+      final notebookColor = widget.notebookToEdit!['color'] ?? '#2196F3';
+      final availableColors = [
+        '#2196F3',
+        '#4CAF50',
+        '#FF9800',
+        '#E91E63',
+        '#9C27B0',
+        '#274472', // Add the problematic color
+        '#F44336', // Red
+        '#FF5722', // Deep Orange
+        '#795548', // Brown
+        '#607D8B', // Blue Grey
+      ];
+      _selectedColor =
+          availableColors.contains(notebookColor) ? notebookColor : '#2196F3';
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final formState = ref.watch(notebookFormProvider);
+    final formNotifier = ref.read(notebookFormProvider.notifier);
+
+    return AlertDialog(
+      title: Text(
+          widget.notebookToEdit != null ? 'Edit Notebook' : 'Create Notebook'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                labelText: 'Name',
+                border: OutlineInputBorder(),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Please enter a name';
+                }
+                return null;
+              },
+              onChanged: (value) {
+                ref.read(notebookFormProvider.notifier).setName(value);
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _descriptionController,
+              decoration: const InputDecoration(
+                labelText: 'Description (optional)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+              onChanged: (value) {
+                ref
+                    .read(notebookFormProvider.notifier)
+                    .setDescription(value.isEmpty ? null : value);
+              },
+            ),
+            const SizedBox(height: 16),
+            // Color picker
+            DropdownButtonFormField<String>(
+              value: _selectedColor,
+              decoration: const InputDecoration(
+                labelText: 'Color',
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                DropdownMenuItem(value: '#2196F3', child: Text('Blue')),
+                DropdownMenuItem(value: '#4CAF50', child: Text('Green')),
+                DropdownMenuItem(value: '#FF9800', child: Text('Orange')),
+                DropdownMenuItem(value: '#E91E63', child: Text('Pink')),
+                DropdownMenuItem(value: '#9C27B0', child: Text('Purple')),
+                DropdownMenuItem(value: '#274472', child: Text('Dark Blue')),
+                DropdownMenuItem(value: '#F44336', child: Text('Red')),
+                DropdownMenuItem(value: '#FF5722', child: Text('Deep Orange')),
+                DropdownMenuItem(value: '#795548', child: Text('Brown')),
+                DropdownMenuItem(value: '#607D8B', child: Text('Blue Grey')),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  _selectedColor = value!;
+                });
+                ref.read(notebookFormProvider.notifier).setColor(value);
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: formNotifier.isValid ? _createNotebook : null,
+          child: Text(widget.notebookToEdit != null ? 'Update' : 'Create'),
+        ),
+      ],
+    );
+  }
+
+  /// Create or update the notebook
+  void _createNotebook() async {
+    if (_formKey.currentState!.validate()) {
+      try {
+        if (widget.notebookToEdit != null) {
+          // Update existing notebook
+          await ref.read(notebooksProvider.notifier).updateNotebook(
+            widget.notebookToEdit!['id'],
+            {
+              'name': _nameController.text.trim(),
+              'description': _descriptionController.text.trim().isEmpty
+                  ? null
+                  : _descriptionController.text.trim(),
+              'color': _selectedColor,
+            },
+          );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Notebook updated successfully')),
+          );
+        } else {
+          // Create new notebook
+          await ref.read(notebooksProvider.notifier).createNotebook(
+                name: _nameController.text.trim(),
+                description: _descriptionController.text.trim().isEmpty
+                    ? null
+                    : _descriptionController.text.trim(),
+                color: _selectedColor,
+              );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Notebook created successfully')),
+          );
+        }
+
+        ref.read(notebookFormProvider.notifier).reset();
+        Navigator.of(context).pop();
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save notebook: $e')),
+        );
+      }
+    }
   }
 }

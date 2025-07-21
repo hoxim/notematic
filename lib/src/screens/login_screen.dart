@@ -1,28 +1,40 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/api_service.dart';
+import '../services/token_service.dart';
+import '../providers/providers.dart';
 import '../config/env_config.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/token_service.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
-  final ApiService _apiService = ApiService();
+  late final ApiService _apiService;
+  late final TokenService _tokenService;
 
   // API status
   String _apiStatus = 'checking';
   bool _isCheckingApi = false;
   bool _autoLogin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _apiService = ref.read(apiServiceProvider);
+    _tokenService = ref.read(tokenServiceProvider);
+    _checkApiStatus();
+    _loadAutoLogin();
+  }
 
   Future<void> _checkApiStatus() async {
     if (_isCheckingApi) return;
@@ -56,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     if (autoLogin) {
       // Try auto-login if tokens are present
-      final isLoggedIn = await TokenService().isLoggedIn();
+      final isLoggedIn = await _tokenService.isLoggedIn();
       if (isLoggedIn && mounted) {
         Navigator.of(context).pushReplacementNamed('/home');
       }
@@ -78,7 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
     final success = await _apiService.login(email: email, password: password);
     if (success) {
-      await TokenService().saveUserEmail(email);
+      await _tokenService.saveUserEmail(email);
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/home');
       }
@@ -93,13 +105,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // Google login temporarily disabled.
-
-  @override
-  void initState() {
-    super.initState();
-    _checkApiStatus();
-    _loadAutoLogin();
-  }
 
   @override
   void dispose() {
@@ -183,9 +188,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           onPressed: _isLoading
                               ? null
                               : () => login(
-                                  _emailController.text,
-                                  _passwordController.text,
-                                ),
+                                    _emailController.text,
+                                    _passwordController.text,
+                                  ),
                           child: _isLoading
                               ? const SizedBox(
                                   height: 20,
@@ -200,57 +205,44 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                 ),
-                if (_errorMessage != null) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    _errorMessage!,
-                    style: const TextStyle(color: Colors.red),
+                const SizedBox(height: 24),
+                if (_errorMessage != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error, color: Colors.red, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _errorMessage!,
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
                 const SizedBox(height: 24),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Text("Don't have an account? "),
-                    GestureDetector(
-                      onTap: () => Navigator.of(
-                        context,
-                      ).pushReplacementNamed('/register'),
-                      child: Text(
-                        'Register',
-                        style: TextStyle(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pushNamed('/register');
+                      },
+                      child: const Text('Sign up'),
                     ),
                   ],
                 ),
               ],
             ),
           ),
-        ),
-      ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _apiStatus == 'up' ? Icons.circle : Icons.circle_outlined,
-              size: 8,
-              color: _apiStatus == 'up' ? Colors.green : Colors.red,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'API: 27${_apiStatus == 'up' ? 'up' : 'down'}',
-              style: TextStyle(
-                fontSize: 12,
-                color: _apiStatus == 'up' ? Colors.green : Colors.red,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
         ),
       ),
     );

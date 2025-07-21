@@ -1,34 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/providers.dart';
 
-class NotesSearchBar extends StatelessWidget {
+class NotesSearchBar extends ConsumerWidget {
   final TextEditingController controller;
-  final Function(String) onChanged;
-  final VoidCallback onClear;
-  final String searchQuery;
 
   const NotesSearchBar({
     super.key,
     required this.controller,
-    required this.onChanged,
-    required this.onClear,
-    required this.searchQuery,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final searchState = ref.watch(searchProvider);
+
     return Center(
       child: Container(
         constraints: const BoxConstraints(maxWidth: 400),
         child: TextField(
           controller: controller,
-          onChanged: onChanged,
+          onChanged: (value) {
+            ref.read(searchProvider.notifier).setQuery(value);
+          },
           decoration: InputDecoration(
             hintText: 'Search notes...',
             prefixIcon: const Icon(Icons.search),
-            suffixIcon: searchQuery.isNotEmpty
+            suffixIcon: searchState.query.isNotEmpty
                 ? IconButton(
                     icon: const Icon(Icons.clear),
-                    onPressed: onClear,
+                    onPressed: () {
+                      controller.clear();
+                      ref.read(searchProvider.notifier).clearSearch();
+                    },
                   )
                 : null,
             border: OutlineInputBorder(
