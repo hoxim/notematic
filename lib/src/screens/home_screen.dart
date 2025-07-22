@@ -247,8 +247,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     // Handle note delete
                     ref.read(notesProvider.notifier).deleteNote(note['uuid']);
                   },
-                  onSyncNote: (note) {
-                    // Handle note sync
+                  onSyncNote: (note) async {
+                    final syncService = ref.read(unifiedSyncServiceProvider);
+                    try {
+                      await syncService.syncSingleNote(note['uuid']);
+                      await ref.read(notesProvider.notifier).refresh();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Note synchronized online!')),
+                      );
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Sync failed: $e')),
+                      );
+                    }
                   },
                 ),
         ),

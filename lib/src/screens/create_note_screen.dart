@@ -215,13 +215,9 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
               .read(notesProvider.notifier)
               .getNoteByUuid(widget.noteToEdit!['uuid']);
           ref.read(createNoteFormProvider.notifier).reset();
-          // Przejdź do NoteViewScreen z nowymi danymi
+          // Zamiast pushReplacement, pop z wynikiem
           if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(
-                builder: (context) => NoteViewScreen(note: updatedNote),
-              ),
-            );
+            Navigator.of(context).pop(updatedNote);
           }
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Note updated successfully')),

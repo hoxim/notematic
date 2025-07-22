@@ -57,6 +57,9 @@ class UnifiedStorageService {
     int? priority,
   }) async {
     try {
+      // Pobierz nazwę notebooka
+      final notebook = await getNotebookByUuid(notebookUuid);
+      final notebookName = notebook?.name ?? '';
       final note = UnifiedNote.create(
         title: title,
         content: content,
@@ -64,6 +67,7 @@ class UnifiedStorageService {
         tags: tags,
         color: color,
         priority: priority,
+        notebookName: notebookName,
       );
       await _saveNote(note);
       _logger.info('Created note:  [1m${note.title} [0m');
@@ -114,6 +118,13 @@ class UnifiedStorageService {
   /// Update note
   Future<void> updateNote(UnifiedNote note) async {
     try {
+      final oldNotebookName = note.notebookName;
+      final oldNotebookUuid = note.notebookUuid;
+      // Jeśli notebookUuid się zmienił, pobierz nową nazwę notebooka
+      final notebook = await getNotebookByUuid(note.notebookUuid);
+      note.notebookName = notebook?.name ?? note.notebookName;
+      _logger.info(
+          '[updateNote] uuid=${note.uuid}, oldNotebookUuid=$oldNotebookUuid, newNotebookUuid=${note.notebookUuid}, oldNotebookName=$oldNotebookName, newNotebookName=${note.notebookName}');
       note.markAsDirty();
       await _saveNote(note);
       _logger.info('Updated note: ${note.title}');

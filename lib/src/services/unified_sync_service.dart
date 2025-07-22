@@ -547,4 +547,26 @@ class UnifiedSyncService {
       rethrow;
     }
   }
+
+  /// Synchronize a single note online (create/update/delete)
+  Future<void> syncSingleNote(String uuid) async {
+    final note = await _storage.getNoteByUuid(uuid);
+    if (note == null) throw Exception('Note not found');
+    if (note.deleted) {
+      await _apiService.deleteNote(note.uuid);
+      await _storage.markNoteAsSynced(
+          note.uuid, DateTime.now().toIso8601String());
+      _logger.info('Note deleted and synced: ${note.title}');
+    } else if (note.isOffline) {
+      final apiNote = await _apiService.createNote(note.toApiMap());
+      await _storage.markNoteAsSynced(
+          note.uuid, apiNote['version'] ?? DateTime.now().toIso8601String());
+      _logger.info('Note created and synced: ${note.title}');
+    } else {
+      final apiNote = await _apiService.updateNote(note.uuid, note.toApiMap());
+      await _storage.markNoteAsSynced(
+          note.uuid, apiNote['version'] ?? DateTime.now().toIso8601String());
+      _logger.info('Note updated and synced: ${note.title}');
+    }
+  }
 }

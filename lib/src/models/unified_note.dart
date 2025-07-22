@@ -65,6 +65,7 @@ class UnifiedNote {
     List<String> tags = const [],
     String? color,
     int? priority,
+    String? notebookName,
   }) {
     final now = DateTime.now();
     final timestamp = now.millisecondsSinceEpoch.toString();
@@ -82,6 +83,7 @@ class UnifiedNote {
       tags: tags,
       color: color,
       priority: priority,
+      notebookName: notebookName,
     );
   }
 

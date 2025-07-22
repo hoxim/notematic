@@ -11,6 +11,7 @@ import '../providers/token_provider.dart';
 import '../providers/storage_provider.dart';
 import '../providers/simple_local_storage_provider.dart';
 import 'create_note_screen.dart';
+import '../providers/sync_service_provider.dart';
 
 class NoteViewScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> note;
@@ -25,9 +26,17 @@ class NoteViewScreen extends ConsumerStatefulWidget {
 }
 
 class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
+  late Map<String, dynamic> _note;
+
+  @override
+  void initState() {
+    super.initState();
+    _note = widget.note;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final note = widget.note;
+    final note = _note;
     final notebookName = note['notebookName'] as String? ?? 'Unknown Notebook';
     final tags = note['tags'] as List<dynamic>? ?? [];
     final isOffline = note['isOffline'] == true;
@@ -283,16 +292,20 @@ class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
     return date.toString();
   }
 
-  void _editNote(BuildContext context) {
-    // Navigate to edit screen (same as create screen but with pre-filled data)
-    Navigator.push(
+  void _editNote(BuildContext context) async {
+    final updatedNote = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (context) => CreateNoteScreen(
-          noteToEdit: widget.note,
+          noteToEdit: _note,
         ),
       ),
     );
+    if (updatedNote != null) {
+      setState(() {
+        _note = updatedNote;
+      });
+    }
   }
 
   void _deleteNote(BuildContext context) {
@@ -310,7 +323,7 @@ class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
-              ref.read(notesProvider.notifier).deleteNote(widget.note['uuid']);
+              ref.read(notesProvider.notifier).deleteNote(_note['uuid']);
               Navigator.of(context).pop();
             },
             style: ElevatedButton.styleFrom(
@@ -324,10 +337,23 @@ class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
     );
   }
 
-  void _syncNote(BuildContext context) {
-    // TODO: Implement sync functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Sync functionality coming soon')),
-    );
+  void _syncNote(BuildContext context) async {
+    final syncService = ref.read(unifiedSyncServiceProvider);
+    try {
+      await syncService.syncSingleNote(_note['uuid']);
+      // Pobierz zaktualizowaną notatkę po sync
+      final updatedNote =
+          await ref.read(notesProvider.notifier).getNoteByUuid(_note['uuid']);
+      setState(() {
+        _note = updatedNote;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Note synchronized online!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sync failed: $e')),
+      );
+    }
   }
 }
