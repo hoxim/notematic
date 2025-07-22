@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/providers.dart';
+import '../providers/notebooks_provider.dart';
+import '../providers/ui_provider.dart';
 
 class NotebooksListView extends ConsumerWidget {
   final Function(Map<String, dynamic>) onNotebookTap;

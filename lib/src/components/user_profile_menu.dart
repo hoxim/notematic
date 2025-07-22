@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/providers.dart';
+import '../providers/user_provider.dart';
 
 class UserProfileMenu extends ConsumerWidget {
   final VoidCallback onProfileTap;

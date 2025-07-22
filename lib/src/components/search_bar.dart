@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/providers.dart';
+import '../providers/ui_provider.dart';
 
 class NotesSearchBar extends ConsumerWidget {
   final TextEditingController controller;

@@ -73,7 +73,7 @@ class StringListConverter extends TypeConverter<List<String>, String> {
 /// Drift database
 @DriftDatabase(tables: [Notes, Notebooks])
 class AppDatabase extends _$AppDatabase {
-  AppDatabase(QueryExecutor e) : super(e);
+  AppDatabase(super.e);
 
   @override
   int get schemaVersion => 1;

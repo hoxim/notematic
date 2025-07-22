@@ -88,9 +88,8 @@ class UnifiedNote {
   /// Create from API response
   static UnifiedNote fromApi(Map<String, dynamic> map) {
     final now = DateTime.now();
-
     return UnifiedNote(
-      uuid: map['id'] ?? map['_id'] ?? '',
+      uuid: map['uuid'] ?? map['id'] ?? map['_id'] ?? '',
       title: map['title'] ?? '',
       content: map['content'] ?? '',
       notebookUuid: map['notebookUuid'] ?? map['notebook_id'] ?? '',
@@ -111,7 +110,7 @@ class UnifiedNote {
 
   /// Convert to API format
   Map<String, dynamic> toApi() => {
-        'id': uuid,
+        'uuid': uuid,
         'title': title,
         'content': content,
         'notebookUuid': notebookUuid,
@@ -128,7 +127,7 @@ class UnifiedNote {
 
   /// Convert to UI format (for display)
   Map<String, dynamic> toMap() => {
-        'id': uuid,
+        'uuid': uuid,
         'title': title,
         'content': content,
         'notebookUuid': notebookUuid,

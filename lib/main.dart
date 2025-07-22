@@ -8,8 +8,8 @@ import 'src/screens/create_note_screen.dart';
 import 'src/config/app_config.dart';
 import 'src/screens/login_screen.dart';
 import 'src/screens/register_screen.dart';
-import 'src/providers/providers.dart';
 import 'src/services/unified_storage_service.dart';
+import 'src/providers/user_provider.dart';
 
 // ObjectBox will be initialized when needed by the services
 
@@ -24,24 +24,6 @@ Future<void> main() async {
   logger.info('Starting Notematic Flutter app');
   AppConfig.logConfiguration();
 
-  // Initialize API service to load saved tokens
-  final apiService = ApiService();
-  await apiService.initialize();
-  logger.info('API service initialized');
-
-  // Set up global forced logout handler (401)
-  apiService.onForceLogout = () {
-    logger.warning(
-      'Global forced logout triggered (401). Navigating to login.',
-    );
-    navigatorKey.currentState?.pushNamedAndRemoveUntil(
-      '/login',
-      (route) => false,
-    );
-  };
-
-  // Initialize platform-specific services
-  // (This will only initialize ObjectBox on non-web platforms)
   logger.info('Initializing platform services');
   await UnifiedStorageService().initialize();
 
@@ -125,64 +107,26 @@ class AuthWrapper extends ConsumerStatefulWidget {
 
 class _AuthWrapperState extends ConsumerState<AuthWrapper> {
   bool _isLoading = true;
-  bool _isLoggedIn = false;
-  late final LoggerService _logger;
 
   @override
   void initState() {
     super.initState();
-    _logger = ref.read(loggerServiceProvider);
-    _checkAuthStatus();
+    _initAuth();
   }
 
-  Future<void> _checkAuthStatus() async {
-    _logger.info('Starting auth check...');
-    try {
-      final tokenService = ref.read(tokenServiceProvider);
-      final apiService = ref.read(apiServiceProvider);
-
-      // Check if token exists and is valid
-      final isLoggedIn = await tokenService.isLoggedIn();
-      _logger.info('Token check result: $isLoggedIn');
-
-      if (isLoggedIn) {
-        // Try to validate token with API
-        try {
-          await apiService
-              .initialize(); // This will check and refresh token if needed
-          _logger.info('Token validation successful');
-        } catch (e) {
-          _logger.warning('Token validation failed: $e');
-          // If token validation fails, clear token and force logout
-          await tokenService.clearToken();
-          setState(() {
-            _isLoggedIn = false;
-            _isLoading = false;
-          });
-          return;
-        }
-      }
-
-      setState(() {
-        _isLoggedIn = isLoggedIn;
-        _isLoading = false;
-      });
-      _logger.info('Auth check completed');
-    } catch (e) {
-      _logger.error('Failed to check auth status: $e');
-      setState(() {
-        _isLoggedIn = false;
-        _isLoading = false;
-      });
-    }
+  Future<void> _initAuth() async {
+    final apiService = ref.read(apiServiceProvider);
+    await apiService.checkAndSetLoginStatus();
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    return _isLoggedIn ? const HomeScreen() : const LoginScreen();
+    final isLoggedIn = ref.watch(isLoggedInProvider);
+    if (_isLoading) return const CircularProgressIndicator();
+    if (isLoggedIn) return const HomeScreen();
+    return const LoginScreen();
   }
 }

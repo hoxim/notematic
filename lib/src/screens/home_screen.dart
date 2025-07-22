@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/providers.dart';
+import '../providers/notes_provider.dart';
+import '../providers/notebooks_provider.dart';
+import '../providers/user_provider.dart';
+import '../providers/ui_provider.dart';
+import '../providers/form_provider.dart';
+import '../providers/sync_provider.dart';
+import '../providers/logger_provider.dart';
+import '../providers/token_provider.dart';
+import '../providers/storage_provider.dart';
+import '../providers/simple_local_storage_provider.dart';
 import '../components/notes_list_view.dart';
 import '../components/notebooks_list_view.dart';
 import '../components/search_bar.dart';
@@ -11,6 +20,7 @@ import '../components/sync_toggle.dart';
 import 'note_view_screen.dart';
 import '../services/unified_sync_service.dart';
 import 'create_note_screen.dart';
+import '../providers/sync_service_provider.dart';
 
 /// Home screen that displays notes and notebooks
 /// Uses unified models and providers for state management
@@ -235,7 +245,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   },
                   onDeleteNote: (note) {
                     // Handle note delete
-                    ref.read(notesProvider.notifier).deleteNote(note['id']);
+                    ref.read(notesProvider.notifier).deleteNote(note['uuid']);
                   },
                   onSyncNote: (note) {
                     // Handle note sync
@@ -292,7 +302,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Navigator.of(context).pop();
               ref
                   .read(notebooksProvider.notifier)
-                  .deleteNotebook(notebook['id']);
+                  .deleteNotebook(notebook['uuid']);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,

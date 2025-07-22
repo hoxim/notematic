@@ -4,9 +4,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/unified_note.dart';
 import '../config/app_config.dart';
 import 'logger_service.dart';
+import '../providers/user_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final apiServiceProvider = Provider<ApiService>((ref) => ApiService(ref));
 
 /// Service for API communication and token management
 class ApiService {
+  final Ref ref;
+  ApiService(this.ref);
+
   static String get baseUrl => AppConfig.apiBaseUrl;
 
   void Function()? onForceLogout;
@@ -384,5 +391,14 @@ class ApiService {
     } catch (e) {
       rethrow;
     }
+  }
+
+  Future<void> checkAndSetLoginStatus() async {
+    final token = await getToken();
+    bool isLoggedIn = false;
+    if (token != null && token.isNotEmpty) {
+      isLoggedIn = await _checkAndRefreshToken();
+    }
+    ref.read(isLoggedInProvider.notifier).state = isLoggedIn;
   }
 }

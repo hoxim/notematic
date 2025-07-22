@@ -84,9 +84,8 @@ class UnifiedNotebook {
   /// Create from API response
   static UnifiedNotebook fromApi(Map<String, dynamic> map) {
     final now = DateTime.now();
-
     return UnifiedNotebook(
-      uuid: map['id'] ?? map['_id'] ?? '',
+      uuid: map['uuid'] ?? map['id'] ?? map['_id'] ?? '',
       name: map['name'] ?? '',
       description: map['description'],
       color: map['color'],
@@ -106,7 +105,7 @@ class UnifiedNotebook {
 
   /// Convert to API format
   Map<String, dynamic> toApi() => {
-        'id': uuid,
+        'uuid': uuid,
         'name': name,
         'description': description,
         'color': color,
@@ -122,7 +121,7 @@ class UnifiedNotebook {
 
   /// Convert to UI format (for display)
   Map<String, dynamic> toMap() => {
-        'id': uuid,
+        'uuid': uuid,
         'name': name,
         'description': description,
         'color': color,

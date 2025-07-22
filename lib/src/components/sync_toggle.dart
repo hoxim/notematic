@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/providers.dart';
+import '../providers/sync_provider.dart';
 
 class SyncToggle extends ConsumerWidget {
   final VoidCallback? onSyncNow;

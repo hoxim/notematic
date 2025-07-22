@@ -126,11 +126,17 @@ class UnifiedStorageService {
   /// Delete note (soft delete)
   Future<void> deleteNote(String uuid) async {
     try {
+      _logger.info('Attempting to delete note with uuid: $uuid');
       final note = await getNoteByUuid(uuid);
       if (note != null) {
+        _logger.info(
+            'Note found for deletion: title="${note.title}", uuid=$uuid, deleted=${note.deleted}');
         note.delete();
         await _saveNote(note);
-        _logger.info('Deleted note: ${note.title}');
+        _logger.info(
+            'Deleted note: ${note.title} (uuid: $uuid, deleted flag: ${note.deleted})');
+      } else {
+        _logger.warning('Note to delete not found: uuid=$uuid');
       }
     } catch (e) {
       _logger.error('Failed to delete note: $e');

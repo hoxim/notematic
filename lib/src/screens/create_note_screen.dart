@@ -1,7 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/providers.dart';
+import '../providers/notes_provider.dart';
+import '../providers/notebooks_provider.dart';
+import '../providers/user_provider.dart';
+import '../providers/ui_provider.dart';
+import '../providers/form_provider.dart';
+import '../providers/sync_provider.dart';
+import '../providers/logger_provider.dart';
+import '../providers/token_provider.dart';
+import '../providers/storage_provider.dart';
+import '../providers/simple_local_storage_provider.dart';
 import 'home_screen.dart'; // Dodany import dla CreateNotebookDialog
+import 'note_view_screen.dart'; // Dodany import dla NoteViewScreen
 
 class CreateNoteScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic>? noteToEdit;
@@ -24,6 +34,15 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
       _titleController.text = widget.noteToEdit!['title'] ?? '';
       _contentController.text = widget.noteToEdit!['content'] ?? '';
       _selectedNotebookUuid = widget.noteToEdit!['notebookUuid'];
+      // Inicjalizacja formProvidera, żeby Save był aktywny
+      Future.microtask(() {
+        final formNotifier = ref.read(createNoteFormProvider.notifier);
+        formNotifier.setTitle(_titleController.text);
+        formNotifier.setContent(_contentController.text);
+        if (_selectedNotebookUuid != null) {
+          formNotifier.setNotebookUuid(_selectedNotebookUuid!);
+        }
+      });
     }
   }
 
@@ -37,14 +56,30 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
   @override
   Widget build(BuildContext context) {
     final notebooksAsync = ref.watch(notebooksProvider);
+    final formState = ref.watch(createNoteFormProvider);
     final formNotifier = ref.read(createNoteFormProvider.notifier);
+
+    // Ustaw domyślny notebook jeśli nie jest ustawiony i lista nie jest pusta
+    if (notebooksAsync.hasValue &&
+        notebooksAsync.value!.isNotEmpty &&
+        _selectedNotebookUuid == null) {
+      Future.microtask(() {
+        if (mounted) {
+          setState(() {
+            _selectedNotebookUuid =
+                notebooksAsync.value!.first['uuid'] as String;
+          });
+          formNotifier.setNotebookUuid(_selectedNotebookUuid!);
+        }
+      });
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.noteToEdit != null ? 'Edit Note' : 'Create Note'),
         actions: [
           TextButton(
-            onPressed: formNotifier.isValid ? _saveNote : null,
+            onPressed: formState.isValid ? _saveNote : null,
             child: const Text('Save', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -65,7 +100,7 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
                   ),
                   items: notebooksAsync.value!.map((notebook) {
                     return DropdownMenuItem<String>(
-                      value: notebook['id'] as String,
+                      value: notebook['uuid'] as String,
                       child: Text(notebook['name'] as String? ?? 'Untitled'),
                     );
                   }).toList(),
@@ -107,7 +142,7 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
                           if (updated.hasValue && updated.value!.isNotEmpty) {
                             setState(() {
                               _selectedNotebookUuid =
-                                  updated.value!.last['id'] as String;
+                                  updated.value!.last['uuid'] as String;
                             });
                             formNotifier
                                 .setNotebookUuid(_selectedNotebookUuid!);
@@ -175,6 +210,19 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
               'notebookUuid': _selectedNotebookUuid!,
             },
           );
+          // Pobierz zaktualizowaną notatkę po uuid
+          final updatedNote = await ref
+              .read(notesProvider.notifier)
+              .getNoteByUuid(widget.noteToEdit!['uuid']);
+          ref.read(createNoteFormProvider.notifier).reset();
+          // Przejdź do NoteViewScreen z nowymi danymi
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => NoteViewScreen(note: updatedNote),
+              ),
+            );
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Note updated successfully')),
           );
@@ -185,12 +233,12 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
                 content: _contentController.text.trim(),
                 notebookUuid: _selectedNotebookUuid!,
               );
+          ref.read(createNoteFormProvider.notifier).reset();
+          Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Note created successfully')),
           );
         }
-        ref.read(createNoteFormProvider.notifier).reset();
-        Navigator.of(context).pop();
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to save note: $e')),

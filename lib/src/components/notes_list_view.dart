@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/providers.dart';
+import '../providers/notes_provider.dart';
+import '../providers/ui_provider.dart';
 
 class NotesListView extends ConsumerWidget {
   final Function(Map<String, dynamic>) onNoteTap;

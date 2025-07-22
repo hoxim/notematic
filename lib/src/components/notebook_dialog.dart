@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../utils/note_colors.dart';
-import '../providers/providers.dart';
+import '../providers/form_provider.dart';
 
 class NotebookDialog extends ConsumerStatefulWidget {
   final Function(String name, String? description, String color) onCreate;

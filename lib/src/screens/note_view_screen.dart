@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/providers.dart';
+import '../providers/notes_provider.dart';
+import '../providers/notebooks_provider.dart';
+import '../providers/user_provider.dart';
+import '../providers/ui_provider.dart';
+import '../providers/form_provider.dart';
+import '../providers/sync_provider.dart';
+import '../providers/logger_provider.dart';
+import '../providers/token_provider.dart';
+import '../providers/storage_provider.dart';
+import '../providers/simple_local_storage_provider.dart';
 import 'create_note_screen.dart';
 
 class NoteViewScreen extends ConsumerStatefulWidget {
@@ -301,7 +310,7 @@ class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
-              ref.read(notesProvider.notifier).deleteNote(widget.note['id']);
+              ref.read(notesProvider.notifier).deleteNote(widget.note['uuid']);
               Navigator.of(context).pop();
             },
             style: ElevatedButton.styleFrom(

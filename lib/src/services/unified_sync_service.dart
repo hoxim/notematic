@@ -11,8 +11,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// and handles conflict resolution between local and server data
 class UnifiedSyncService {
   final UnifiedStorageService _storage = UnifiedStorageService();
-  final ApiService _apiService = ApiService();
   final LoggerService _logger = LoggerService();
+  final ApiService _apiService;
+
+  UnifiedSyncService(this._apiService);
 
   // Cache for online mode status
   bool? _cachedOnlineMode;
