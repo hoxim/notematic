@@ -23,44 +23,57 @@ class CreateFAB extends ConsumerWidget {
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         if (isExpanded)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: ScaleTransition(
-              scale: animation,
-              child: FloatingActionButton.extended(
-                onPressed: () {
-                  print('Create notebook pressed!');
-                  ref.read(fabExpandedProvider.notifier).toggle();
-                  onCreateNotebook();
-                },
-                heroTag: 'createNotebook',
-                backgroundColor: Theme.of(context).colorScheme.secondary,
-                foregroundColor: Theme.of(context).colorScheme.onSecondary,
-                icon: const Icon(Icons.book),
-                label: const Text('Notebook'),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: ScaleTransition(
+                    scale: animation,
+                    child: FloatingActionButton.extended(
+                      onPressed: () {
+                        print('Create notebook pressed!');
+                        ref.read(fabExpandedProvider.notifier).toggle();
+                        onCreateNotebook();
+                      },
+                      heroTag: 'createNotebook',
+                      backgroundColor: Theme.of(context).colorScheme.secondary,
+                      foregroundColor:
+                          Theme.of(context).colorScheme.onSecondary,
+                      icon: const Icon(Icons.book),
+                      label: const Text('Notebook'),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        if (isExpanded)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: ScaleTransition(
-              scale: animation,
-              child: FloatingActionButton.extended(
-                onPressed: () {
-                  print('Create note pressed!');
-                  ref.read(fabExpandedProvider.notifier).toggle();
-                  onCreateNote();
-                },
-                heroTag: 'createNote',
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                icon: const Icon(Icons.note_add),
-                label: const Text('Note'),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16.0),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: ScaleTransition(
+                    scale: animation,
+                    child: FloatingActionButton.extended(
+                      onPressed: () {
+                        print('Create note pressed!');
+                        ref.read(fabExpandedProvider.notifier).toggle();
+                        onCreateNote();
+                      },
+                      heroTag: 'createNote',
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      icon: const Icon(Icons.note_add),
+                      label: const Text('Note'),
+                    ),
+                  ),
+                ),
               ),
-            ),
+            ],
           ),
         FloatingActionButton(
           onPressed: () {

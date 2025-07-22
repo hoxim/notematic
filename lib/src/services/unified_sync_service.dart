@@ -141,19 +141,24 @@ class UnifiedSyncService {
       final dirtyNotes = await _storage.getDirtyNotes();
       for (final note in dirtyNotes) {
         try {
-          if (note.isOffline) {
+          if (note.deleted) {
+            await _apiService.deleteNote(note.uuid);
+            await _storage.markNoteAsSynced(
+                note.uuid, DateTime.now().toIso8601String());
+            _logger.info('Note deleted and synced: ${note.title}');
+          } else if (note.isOffline) {
             // Create new note on server
             final apiNote = await _apiService.createNote(note.toApiMap());
             await _storage.markNoteAsSynced(note.uuid,
                 apiNote['version'] ?? DateTime.now().toIso8601String());
-            _logger.info('Created note on server: ${note.title}');
+            _logger.info('Note created and synced: ${note.title}');
           } else {
             // Update existing note on server
             final apiNote =
                 await _apiService.updateNote(note.uuid, note.toApiMap());
             await _storage.markNoteAsSynced(note.uuid,
                 apiNote['version'] ?? DateTime.now().toIso8601String());
-            _logger.info('Updated note on server: ${note.title}');
+            _logger.info('Note updated and synced: ${note.title}');
           }
         } catch (e) {
           _logger.error('Failed to sync note ${note.title}: $e');
