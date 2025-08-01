@@ -17,8 +17,13 @@ class AppConfig {
     return 'http://$host:$port';
   }
 
-  static String get apiHost =>
-      _getEnv('API_HOST').isNotEmpty ? _getEnv('API_HOST') : '192.109.245.95';
+  static String get apiHost {
+    final host = _getEnv('API_HOST');
+    if (host.isEmpty) {
+      throw Exception('API_HOST must be set in .env');
+    }
+    return host;
+  }
   static int get apiPort => int.tryParse(_getEnv('API_PORT')) ?? 8080;
   static String get environment =>
       _getEnv('ENVIRONMENT').isNotEmpty ? _getEnv('ENVIRONMENT') : 'production';

@@ -8,6 +8,11 @@
 .build/
 .buildlog/
 .history
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
 .svn/
 .swiftpm/
 migrate_working_dir/
@@ -32,6 +37,39 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+**/build/
+
+# Security and sensitive files
+*.key
+*.pem
+*.p12
+*.keystore
+*.jks
+*.crt
+config.json
+secrets.json
+credentials.json
+firebase-credentials.json
+google-services.json
+GoogleService-Info.plist
+
+# Logs and temporary files
+logs/
+*.log
+temp/
+tmp/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# Backup files
+*.bak
+*.backup
+*~
+.#*
 
 # Symbolication related
 app.*.symbols
