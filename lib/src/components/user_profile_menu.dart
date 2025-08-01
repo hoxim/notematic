@@ -31,9 +31,7 @@ class UserProfileMenu extends ConsumerWidget {
             CircleAvatar(
               backgroundColor: Theme.of(context).colorScheme.primary,
               child: Text(
-                userEmail != null && userEmail.isNotEmpty
-                    ? userEmail[0].toUpperCase()
-                    : 'U',
+                userEmail.isNotEmpty ? userEmail[0].toUpperCase() : 'U',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,

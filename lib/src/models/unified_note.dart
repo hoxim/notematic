@@ -115,7 +115,7 @@ class UnifiedNote {
         'uuid': uuid,
         'title': title,
         'content': content,
-        'notebookUuid': notebookUuid,
+        'notebook_uuid': notebookUuid, // Changed to match API expectation
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
         'deleted': deleted,

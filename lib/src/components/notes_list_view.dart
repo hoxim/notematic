@@ -97,7 +97,7 @@ class NotesListView extends ConsumerWidget {
                               : Colors.green,
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Theme.of(context).colorScheme.surface,
+                            color: Theme.of(context).scaffoldBackgroundColor,
                             width: 1,
                           ),
                         ),

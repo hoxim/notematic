@@ -6,7 +6,7 @@ import '../providers/token_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({Key? key}) : super(key: key);
+  const LoginScreen({super.key});
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -209,9 +209,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.1),
+                      color: Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.withOpacity(0.3)),
+                      border:
+                          Border.all(color: Colors.red.withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [

@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/api_service.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
-  const RegisterScreen({Key? key}) : super(key: key);
+  const RegisterScreen({super.key});
 
   @override
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();

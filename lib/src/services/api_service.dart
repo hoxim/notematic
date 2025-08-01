@@ -170,6 +170,32 @@ class ApiService {
         headers: allHeaders);
   }
 
+  Future<http.Response> put(
+    String endpoint, {
+    Map<String, String>? headers,
+    Object? body,
+  }) async {
+    final token = await getToken();
+    final allHeaders = <String, String>{
+      'Content-Type': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+      ...?headers,
+    };
+
+    String? bodyString;
+    if (body is String) {
+      bodyString = body;
+    } else if (body is Map) {
+      bodyString = jsonEncode(body);
+    }
+
+    return await http.put(
+      Uri.parse('$baseUrl$endpoint'),
+      headers: allHeaders,
+      body: bodyString,
+    );
+  }
+
   /// Push local notes to API
   Future<bool> syncNotes(List<UnifiedNote> notes) async {
     final response = await post(
@@ -330,7 +356,7 @@ class ApiService {
   Future<Map<String, dynamic>> updateNote(
       String uuid, Map<String, dynamic> noteData) async {
     try {
-      final response = await post('/protected/notes/$uuid', body: noteData);
+      final response = await put('/protected/notes/$uuid', body: noteData);
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }
@@ -359,7 +385,7 @@ class ApiService {
       String uuid, Map<String, dynamic> notebookData) async {
     try {
       final response =
-          await post('/protected/notebooks/$uuid', body: notebookData);
+          await put('/protected/notebooks/$uuid', body: notebookData);
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       }

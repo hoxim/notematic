@@ -76,6 +76,7 @@ class NotebooksListView extends ConsumerWidget {
 
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
+              color: Theme.of(context).scaffoldBackgroundColor,
               child: ListTile(
                 contentPadding: const EdgeInsets.all(16),
                 leading: Stack(
@@ -95,7 +96,7 @@ class NotebooksListView extends ConsumerWidget {
                           color: isOffline ? Colors.orange : Colors.green,
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: Theme.of(context).colorScheme.surface,
+                            color: Theme.of(context).scaffoldBackgroundColor,
                             width: 1,
                           ),
                         ),

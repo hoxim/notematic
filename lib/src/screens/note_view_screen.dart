@@ -1,15 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/notes_provider.dart';
-import '../providers/notebooks_provider.dart';
-import '../providers/user_provider.dart';
-import '../providers/ui_provider.dart';
-import '../providers/form_provider.dart';
-import '../providers/sync_provider.dart';
-import '../providers/logger_provider.dart';
-import '../providers/token_provider.dart';
-import '../providers/storage_provider.dart';
-import '../providers/simple_local_storage_provider.dart';
 import 'create_note_screen.dart';
 import '../providers/sync_service_provider.dart';
 
@@ -185,10 +176,12 @@ class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
+                color: Theme.of(context).scaffoldBackgroundColor,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white24
+                      : Colors.black26,
                 ),
               ),
               child: Text(
@@ -211,11 +204,12 @@ class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
+                  color: Theme.of(context).scaffoldBackgroundColor,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color:
-                        Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white24
+                        : Colors.black26,
                   ),
                 ),
                 child: Column(

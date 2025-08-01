@@ -4,6 +4,7 @@ import '../models/unified_note.dart';
 import '../models/unified_notebook.dart';
 import 'logger_service.dart';
 import 'package:drift/drift.dart' show Value;
+import 'package:uuid/uuid.dart';
 
 /// Unified storage service using Drift for local database
 class UnifiedStorageService {
@@ -78,10 +79,12 @@ class UnifiedStorageService {
     }
   }
 
-  /// Get all notes
+  /// Get all notes (excluding deleted ones)
   Future<List<UnifiedNote>> getAllNotes() async {
     try {
-      final rows = await _db!.select(_db!.notes).get();
+      final rows = await (_db!.select(_db!.notes)
+            ..where((tbl) => tbl.deleted.equals(false)))
+          .get();
       return rows.map<UnifiedNote>(_noteFromRow).toList();
     } catch (e) {
       _logger.error('Failed to get all notes: $e');
@@ -89,11 +92,12 @@ class UnifiedStorageService {
     }
   }
 
-  /// Get notes by notebook
+  /// Get notes by notebook (excluding deleted ones)
   Future<List<UnifiedNote>> getNotesByNotebook(String notebookUuid) async {
     try {
       final rows = await (_db!.select(_db!.notes)
-            ..where((tbl) => tbl.notebookUuid.equals(notebookUuid)))
+            ..where((tbl) => tbl.notebookUuid.equals(notebookUuid))
+            ..where((tbl) => tbl.deleted.equals(false)))
           .get();
       return rows.map<UnifiedNote>(_noteFromRow).toList();
     } catch (e) {
@@ -221,10 +225,12 @@ class UnifiedStorageService {
     }
   }
 
-  /// Get all notebooks
+  /// Get all notebooks (excluding deleted ones)
   Future<List<UnifiedNotebook>> getAllNotebooks() async {
     try {
-      final rows = await _db!.select(_db!.notebooks).get();
+      final rows = await (_db!.select(_db!.notebooks)
+            ..where((tbl) => tbl.deleted.equals(false)))
+          .get();
       return rows.map<UnifiedNotebook>(_notebookFromRow).toList();
     } catch (e) {
       _logger.error('Failed to get all notebooks: $e');
@@ -258,6 +264,44 @@ class UnifiedStorageService {
     }
   }
 
+  /// Ensure default notebook exists (create if not)
+  Future<UnifiedNotebook> ensureDefaultNotebook() async {
+    try {
+      // Check if default notebook exists
+      final defaultNotebook = await getDefaultNotebook();
+      if (defaultNotebook != null) {
+        return defaultNotebook;
+      }
+
+      // Create default notebook if none exists
+      final allNotebooks = await getAllNotebooks();
+      if (allNotebooks.isEmpty) {
+        final defaultNotebook = UnifiedNotebook(
+          uuid: const Uuid().v4(),
+          name: 'Default Notebook',
+          description: 'Default notebook for notes',
+          color: '#2196F3',
+          isDefault: true,
+          isOffline: true,
+          isDirty: true,
+        );
+        await _saveNotebook(defaultNotebook);
+        _logger.info('Created default notebook: ${defaultNotebook.name}');
+        return defaultNotebook;
+      } else {
+        // Make first notebook default
+        final firstNotebook = allNotebooks.first;
+        firstNotebook.isDefault = true;
+        await _saveNotebook(firstNotebook);
+        _logger.info('Made first notebook default: ${firstNotebook.name}');
+        return firstNotebook;
+      }
+    } catch (e) {
+      _logger.error('Failed to ensure default notebook: $e');
+      rethrow;
+    }
+  }
+
   /// Update notebook
   Future<void> updateNotebook(UnifiedNotebook notebook) async {
     try {
@@ -270,14 +314,26 @@ class UnifiedStorageService {
     }
   }
 
-  /// Delete notebook (soft delete)
+  /// Delete notebook (soft delete) with cascade delete of notes
   Future<void> deleteNotebook(String uuid) async {
     try {
       final notebook = await getNotebookByUuid(uuid);
       if (notebook != null) {
+        // Get all notes in this notebook
+        final notes = await getNotesByNotebook(uuid);
+
+        // Delete all notes in the notebook
+        for (final note in notes) {
+          note.delete();
+          await _saveNote(note);
+          _logger.info('Deleted note (cascade): ${note.title}');
+        }
+
+        // Delete the notebook
         notebook.delete();
         await _saveNotebook(notebook);
-        _logger.info('Deleted notebook: ${notebook.name}');
+        _logger.info(
+            'Deleted notebook with ${notes.length} notes: ${notebook.name}');
       }
     } catch (e) {
       _logger.error('Failed to delete notebook: $e');
@@ -327,6 +383,65 @@ class UnifiedStorageService {
     }
   }
 
+  /// Sync notes from API to local with version comparison
+  Future<void> syncNotesFromApiWithVersionCheck(
+      List<Map<String, dynamic>> apiNotes) async {
+    try {
+      int updated = 0;
+      int added = 0;
+      int skipped = 0;
+
+      for (final apiNote in apiNotes) {
+        final serverNote = UnifiedNote.fromApi(apiNote);
+        final localNote = await getNoteByUuid(serverNote.uuid);
+
+        if (localNote == null) {
+          // New note from server - add it
+          await _saveNote(serverNote);
+          added++;
+          _logger.info('Added new note from server: ${serverNote.title}');
+        } else {
+          // Compare versions
+          final serverVersion = serverNote.serverVersion;
+          final localVersion = localNote.serverVersion;
+
+          if (serverVersion != null && localVersion != null) {
+            // Compare timestamps
+            final serverTime = DateTime.tryParse(serverVersion);
+            final localTime = DateTime.tryParse(localVersion);
+
+            if (serverTime != null &&
+                localTime != null &&
+                serverTime.isAfter(localTime)) {
+              // Server version is newer - update local
+              await _saveNote(serverNote);
+              updated++;
+              _logger.info(
+                  'Updated note from server (newer version): ${serverNote.title}');
+            } else {
+              // Local version is newer or same - skip
+              skipped++;
+              _logger.info(
+                  'Skipped note (local version is newer or same): ${serverNote.title}');
+            }
+          } else {
+            // No version info - update to be safe
+            await _saveNote(serverNote);
+            updated++;
+            _logger.info(
+                'Updated note from server (no version info): ${serverNote.title}');
+          }
+        }
+      }
+
+      _logger.info(
+          'Sync summary - Added: $added, Updated: $updated, Skipped: $skipped');
+    } catch (e) {
+      _logger.error('Failed to sync notes from API with version check: $e');
+      rethrow;
+    }
+  }
+
   /// Sync notebooks from API to local
   Future<void> syncNotebooksFromApi(
       List<Map<String, dynamic>> apiNotebooks) async {
@@ -338,6 +453,66 @@ class UnifiedStorageService {
       _logger.info('Synced ${apiNotebooks.length} notebooks from API');
     } catch (e) {
       _logger.error('Failed to sync notebooks from API: $e');
+      rethrow;
+    }
+  }
+
+  /// Sync notebooks from API to local with version comparison
+  Future<void> syncNotebooksFromApiWithVersionCheck(
+      List<Map<String, dynamic>> apiNotebooks) async {
+    try {
+      int updated = 0;
+      int added = 0;
+      int skipped = 0;
+
+      for (final apiNotebook in apiNotebooks) {
+        final serverNotebook = UnifiedNotebook.fromApi(apiNotebook);
+        final localNotebook = await getNotebookByUuid(serverNotebook.uuid);
+
+        if (localNotebook == null) {
+          // New notebook from server - add it
+          await _saveNotebook(serverNotebook);
+          added++;
+          _logger
+              .info('Added new notebook from server: ${serverNotebook.name}');
+        } else {
+          // Compare versions
+          final serverVersion = serverNotebook.serverVersion;
+          final localVersion = localNotebook.serverVersion;
+
+          if (serverVersion != null && localVersion != null) {
+            // Compare timestamps
+            final serverTime = DateTime.tryParse(serverVersion);
+            final localTime = DateTime.tryParse(localVersion);
+
+            if (serverTime != null &&
+                localTime != null &&
+                serverTime.isAfter(localTime)) {
+              // Server version is newer - update local
+              await _saveNotebook(serverNotebook);
+              updated++;
+              _logger.info(
+                  'Updated notebook from server (newer version): ${serverNotebook.name}');
+            } else {
+              // Local version is newer or same - skip
+              skipped++;
+              _logger.info(
+                  'Skipped notebook (local version is newer or same): ${serverNotebook.name}');
+            }
+          } else {
+            // No version info - update to be safe
+            await _saveNotebook(serverNotebook);
+            updated++;
+            _logger.info(
+                'Updated notebook from server (no version info): ${serverNotebook.name}');
+          }
+        }
+      }
+
+      _logger.info(
+          'Sync summary - Added: $added, Updated: $updated, Skipped: $skipped');
+    } catch (e) {
+      _logger.error('Failed to sync notebooks from API with version check: $e');
       rethrow;
     }
   }

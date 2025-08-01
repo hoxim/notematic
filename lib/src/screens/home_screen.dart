@@ -6,10 +6,7 @@ import '../providers/user_provider.dart';
 import '../providers/ui_provider.dart';
 import '../providers/form_provider.dart';
 import '../providers/sync_provider.dart';
-import '../providers/logger_provider.dart';
-import '../providers/token_provider.dart';
 import '../providers/storage_provider.dart';
-import '../providers/simple_local_storage_provider.dart';
 import '../components/notes_list_view.dart';
 import '../components/notebooks_list_view.dart';
 import '../components/search_bar.dart';
@@ -18,7 +15,6 @@ import '../components/user_profile_menu.dart';
 import '../components/create_fab.dart';
 import '../components/sync_toggle.dart';
 import 'note_view_screen.dart';
-import '../services/unified_sync_service.dart';
 import 'create_note_screen.dart';
 import '../providers/sync_service_provider.dart';
 
@@ -33,7 +29,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _showNotebooks = false;
-  String _searchQuery = '';
+  final String _searchQuery = '';
   final _searchController = TextEditingController();
 
   @override
@@ -115,6 +111,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
+      // NIE ustawiam backgroundColor, Scaffold użyje Theme.of(context).scaffoldBackgroundColor
       body: _buildBody(notesAsync, notebooksAsync, searchState),
       floatingActionButton: CreateFAB(
         animation: const AlwaysStoppedAnimation(1.0),
@@ -245,13 +242,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   },
                   onDeleteNote: (note) {
                     // Handle note delete
-                    ref.read(notesProvider.notifier).deleteNote(note['uuid']);
+                    _showDeleteNoteDialog(context, note);
                   },
                   onSyncNote: (note) async {
                     final syncService = ref.read(unifiedSyncServiceProvider);
                     try {
                       await syncService.syncSingleNote(note['uuid']);
                       await ref.read(notesProvider.notifier).refresh();
+                      if (!mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                             content: Text('Note synchronized online!')),
@@ -298,41 +296,216 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Show delete notebook dialog
   void _showDeleteNotebookDialog(
       BuildContext context, Map<String, dynamic> notebook) {
+    final isOffline = notebook['isOffline'] == true;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Notebook'),
-        content: Text(
-            'Are you sure you want to delete "${notebook['name']}"? This action cannot be undone.'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete "${notebook['name']}"?'),
+            const SizedBox(height: 8),
+            if (isOffline) ...[
+              const Text(
+                'This notebook is offline. You can:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              const Text('• Delete locally only'),
+              const Text('• Delete locally and online when connected'),
+            ] else ...[
+              const Text(
+                'This will delete the notebook and all its notes.',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              ref
-                  .read(notebooksProvider.notifier)
-                  .deleteNotebook(notebook['uuid']);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+          if (isOffline) ...[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                ref
+                    .read(notebooksProvider.notifier)
+                    .deleteNotebook(notebook['uuid']);
+              },
+              child: const Text('Delete Locally'),
             ),
-            child: const Text('Delete'),
-          ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _deleteNotebookWhenOnline(notebook);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete When Online'),
+            ),
+          ] else ...[
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                ref
+                    .read(notebooksProvider.notifier)
+                    .deleteNotebook(notebook['uuid']);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  /// Sync notebook
-  void _syncNotebook(BuildContext context, Map<String, dynamic> notebook) {
-    // TODO: Implement notebook sync
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Notebook sync functionality coming soon')),
+  /// Delete notebook when online (mark for deletion)
+  void _deleteNotebookWhenOnline(Map<String, dynamic> notebook) async {
+    try {
+      // Mark notebook for deletion when online
+      final storage = ref.read(unifiedStorageServiceProvider);
+      final notebookObj = await storage.getNotebookByUuid(notebook['uuid']);
+      if (notebookObj != null) {
+        notebookObj.delete();
+        await storage.updateNotebook(notebookObj);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Notebook "${notebook['name']}" will be deleted when online'),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to mark notebook for deletion: $e')),
+      );
+    }
+  }
+
+  /// Show delete note dialog
+  void _showDeleteNoteDialog(BuildContext context, Map<String, dynamic> note) {
+    final isOffline = note['isOffline'] == true;
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Note'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete "${note['title']}"?'),
+            const SizedBox(height: 8),
+            if (isOffline) ...[
+              const Text(
+                'This note is offline. You can:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              const Text('• Delete locally only'),
+              const Text('• Delete locally and online when connected'),
+            ] else ...[
+              const Text(
+                'This will permanently delete the note.',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          if (isOffline) ...[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                ref.read(notesProvider.notifier).deleteNote(note['uuid']);
+              },
+              child: const Text('Delete Locally'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _deleteNoteWhenOnline(note);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete When Online'),
+            ),
+          ] else ...[
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                ref.read(notesProvider.notifier).deleteNote(note['uuid']);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        ],
+      ),
     );
+  }
+
+  /// Delete note when online (mark for deletion)
+  void _deleteNoteWhenOnline(Map<String, dynamic> note) async {
+    try {
+      // Mark note for deletion when online
+      final storage = ref.read(unifiedStorageServiceProvider);
+      final noteObj = await storage.getNoteByUuid(note['uuid']);
+      if (noteObj != null) {
+        noteObj.delete();
+        await storage.updateNote(noteObj);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Note "${note['title']}" will be deleted when online'),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to mark note for deletion: $e')),
+      );
+    }
+  }
+
+  /// Sync notebook
+  void _syncNotebook(
+      BuildContext context, Map<String, dynamic> notebook) async {
+    final syncService = ref.read(unifiedSyncServiceProvider);
+    try {
+      await syncService.syncSingleNotebook(notebook['uuid']);
+      await ref.read(notebooksProvider.notifier).refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Notebook synchronized online!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sync failed: $e')),
+      );
+    }
   }
 }
 

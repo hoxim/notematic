@@ -82,6 +82,8 @@ class CreateFAB extends ConsumerWidget {
             onToggle();
           },
           heroTag: 'mainFab',
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          foregroundColor: Theme.of(context).colorScheme.onPrimary,
           child: AnimatedRotation(
             turns: isExpanded ? 0.125 : 0, // 45 degrees
             duration: const Duration(milliseconds: 300),

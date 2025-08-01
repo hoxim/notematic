@@ -38,7 +38,7 @@ class NotesSearchBar extends ConsumerWidget {
               borderRadius: BorderRadius.circular(25),
             ),
             filled: true,
-            fillColor: Theme.of(context).colorScheme.surface,
+            fillColor: Theme.of(context).scaffoldBackgroundColor,
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 20,
               vertical: 12,

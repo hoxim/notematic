@@ -3,7 +3,6 @@ import 'api_service.dart';
 import 'logger_service.dart';
 import '../models/unified_note.dart';
 import '../models/unified_notebook.dart';
-import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Unified sync service that handles all synchronization logic
@@ -108,7 +107,7 @@ class UnifiedSyncService {
     }
   }
 
-  /// Sync data from server to local
+  /// Sync data from server to local with version comparison
   Future<void> _syncFromServer() async {
     try {
       _logger.info('Syncing from server to local...');
@@ -116,14 +115,14 @@ class UnifiedSyncService {
       // Get notes from server
       final apiNotes = await _apiService.getNotes();
       if (apiNotes.isNotEmpty) {
-        await _storage.syncNotesFromApi(apiNotes);
+        await _storage.syncNotesFromApiWithVersionCheck(apiNotes);
         _logger.info('Synced ${apiNotes.length} notes from server');
       }
 
       // Get notebooks from server
       final apiNotebooks = await _apiService.getNotebooks();
       if (apiNotebooks.isNotEmpty) {
-        await _storage.syncNotebooksFromApi(apiNotebooks);
+        await _storage.syncNotebooksFromApiWithVersionCheck(apiNotebooks);
         _logger.info('Synced ${apiNotebooks.length} notebooks from server');
       }
     } catch (e) {
@@ -132,26 +131,38 @@ class UnifiedSyncService {
     }
   }
 
-  /// Sync data from local to server
+  /// Sync data from local to server (only dirty items)
   Future<void> _syncToServer() async {
     try {
       _logger.info('Syncing from local to server...');
+
+      int notesSynced = 0;
+      int notebooksSynced = 0;
 
       // Get dirty notes (need sync)
       final dirtyNotes = await _storage.getDirtyNotes();
       for (final note in dirtyNotes) {
         try {
           if (note.deleted) {
-            await _apiService.deleteNote(note.uuid);
-            await _storage.markNoteAsSynced(
-                note.uuid, DateTime.now().toIso8601String());
-            _logger.info('Note deleted and synced: ${note.title}');
+            if (note.isOffline) {
+              // For offline notes that are deleted, just remove them locally
+              await _storage.deleteNote(note.uuid);
+              _logger.info('Offline note deleted locally: ${note.title}');
+            } else {
+              // For online notes that are deleted, try to delete from server
+              await _apiService.deleteNote(note.uuid);
+              await _storage.markNoteAsSynced(
+                  note.uuid, DateTime.now().toIso8601String());
+              _logger.info('Note deleted and synced: ${note.title}');
+              notesSynced++;
+            }
           } else if (note.isOffline) {
             // Create new note on server
             final apiNote = await _apiService.createNote(note.toApiMap());
             await _storage.markNoteAsSynced(note.uuid,
                 apiNote['version'] ?? DateTime.now().toIso8601String());
             _logger.info('Note created and synced: ${note.title}');
+            notesSynced++;
           } else {
             // Update existing note on server
             final apiNote =
@@ -159,6 +170,7 @@ class UnifiedSyncService {
             await _storage.markNoteAsSynced(note.uuid,
                 apiNote['version'] ?? DateTime.now().toIso8601String());
             _logger.info('Note updated and synced: ${note.title}');
+            notesSynced++;
           }
         } catch (e) {
           _logger.error('Failed to sync note ${note.title}: $e');
@@ -169,13 +181,28 @@ class UnifiedSyncService {
       final dirtyNotebooks = await _storage.getDirtyNotebooks();
       for (final notebook in dirtyNotebooks) {
         try {
-          if (notebook.isOffline) {
+          if (notebook.deleted) {
+            if (notebook.isOffline) {
+              // For offline notebooks that are deleted, just remove them locally
+              await _storage.deleteNotebook(notebook.uuid);
+              _logger
+                  .info('Offline notebook deleted locally: ${notebook.name}');
+            } else {
+              // For online notebooks that are deleted, try to delete from server
+              await _apiService.deleteNotebook(notebook.uuid);
+              await _storage.markNotebookAsSynced(
+                  notebook.uuid, DateTime.now().toIso8601String());
+              _logger.info('Notebook deleted and synced: ${notebook.name}');
+              notebooksSynced++;
+            }
+          } else if (notebook.isOffline) {
             // Create new notebook on server
             final apiNotebook =
                 await _apiService.createNotebook(notebook.toApiMap());
             await _storage.markNotebookAsSynced(notebook.uuid,
                 apiNotebook['version'] ?? DateTime.now().toIso8601String());
             _logger.info('Created notebook on server: ${notebook.name}');
+            notebooksSynced++;
           } else {
             // Update existing notebook on server
             final apiNotebook = await _apiService.updateNotebook(
@@ -183,6 +210,7 @@ class UnifiedSyncService {
             await _storage.markNotebookAsSynced(notebook.uuid,
                 apiNotebook['version'] ?? DateTime.now().toIso8601String());
             _logger.info('Updated notebook on server: ${notebook.name}');
+            notebooksSynced++;
           }
         } catch (e) {
           _logger.error('Failed to sync notebook ${notebook.name}: $e');
@@ -190,7 +218,7 @@ class UnifiedSyncService {
       }
 
       _logger.info(
-          'Synced ${dirtyNotes.length} notes and ${dirtyNotebooks.length} notebooks to server');
+          'Synced $notesSynced notes and $notebooksSynced notebooks to server');
     } catch (e) {
       _logger.error('Failed to sync to server: $e');
       rethrow;
@@ -550,6 +578,14 @@ class UnifiedSyncService {
 
   /// Synchronize a single note online (create/update/delete)
   Future<void> syncSingleNote(String uuid) async {
+    // Check if sync is enabled and online
+    final isEnabled = await isSyncEnabled();
+    final isOnline = await isOnlineMode();
+
+    if (!isEnabled || !isOnline) {
+      throw Exception('Sync is disabled or offline');
+    }
+
     final note = await _storage.getNoteByUuid(uuid);
     if (note == null) throw Exception('Note not found');
     if (note.deleted) {
@@ -567,6 +603,37 @@ class UnifiedSyncService {
       await _storage.markNoteAsSynced(
           note.uuid, apiNote['version'] ?? DateTime.now().toIso8601String());
       _logger.info('Note updated and synced: ${note.title}');
+    }
+  }
+
+  /// Synchronize a single notebook online (create/update/delete)
+  Future<void> syncSingleNotebook(String uuid) async {
+    // Check if sync is enabled and online
+    final isEnabled = await isSyncEnabled();
+    final isOnline = await isOnlineMode();
+
+    if (!isEnabled || !isOnline) {
+      throw Exception('Sync is disabled or offline');
+    }
+
+    final notebook = await _storage.getNotebookByUuid(uuid);
+    if (notebook == null) throw Exception('Notebook not found');
+    if (notebook.deleted) {
+      await _apiService.deleteNotebook(notebook.uuid);
+      await _storage.markNotebookAsSynced(
+          notebook.uuid, DateTime.now().toIso8601String());
+      _logger.info('Notebook deleted and synced: ${notebook.name}');
+    } else if (notebook.isOffline) {
+      final apiNotebook = await _apiService.createNotebook(notebook.toApiMap());
+      await _storage.markNotebookAsSynced(notebook.uuid,
+          apiNotebook['version'] ?? DateTime.now().toIso8601String());
+      _logger.info('Notebook created and synced: ${notebook.name}');
+    } else {
+      final apiNotebook =
+          await _apiService.updateNotebook(notebook.uuid, notebook.toApiMap());
+      await _storage.markNotebookAsSynced(notebook.uuid,
+          apiNotebook['version'] ?? DateTime.now().toIso8601String());
+      _logger.info('Notebook updated and synced: ${notebook.name}');
     }
   }
 }

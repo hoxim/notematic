@@ -52,8 +52,8 @@ class UnifiedNotebook {
     this.isDefault = false,
     this.sortOrder,
     this.noteIds = const [],
-  })  : this.createdAt = createdAt ?? DateTime.now(),
-        this.updatedAt = updatedAt ?? DateTime.now();
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
 
   /// Create a new notebook (offline-first)
   static UnifiedNotebook create({

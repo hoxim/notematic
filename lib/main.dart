@@ -10,6 +10,8 @@ import 'src/screens/login_screen.dart';
 import 'src/screens/register_screen.dart';
 import 'src/services/unified_storage_service.dart';
 import 'src/providers/user_provider.dart';
+import 'src/themes/app_theme_dark.dart';
+import 'src/themes/app_theme_light.dart';
 
 // ObjectBox will be initialized when needed by the services
 
@@ -34,54 +36,19 @@ Future<void> main() async {
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-class MyApp extends ConsumerStatefulWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  ConsumerState<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends ConsumerState<MyApp> {
-  ThemeMode _themeMode = ThemeMode.system;
-
-  void _toggleTheme() {
-    setState(() {
-      if (_themeMode == ThemeMode.light) {
-        _themeMode = ThemeMode.dark;
-      } else {
-        _themeMode = ThemeMode.light;
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
       title: 'Notematic',
       navigatorKey: navigatorKey,
-      theme: ThemeData(
-        brightness: Brightness.light,
-        primarySwatch: Colors.pink,
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        primarySwatch: MaterialColor(0xFF212121, <int, Color>{
-          50: Color(0xFF212121),
-          100: Color(0xFF212121),
-          200: Color(0xFF212121),
-          300: Color(0xFF212121),
-          400: Color(0xFF212121),
-          500: Color(0xFF212121),
-          600: Color(0xFF212121),
-          700: Color(0xFF212121),
-          800: Color(0xFF212121),
-          900: Color(0xFF000000),
-        }),
-        useMaterial3: true,
-      ),
-      themeMode: _themeMode,
-      home: AuthWrapper(onToggleTheme: _toggleTheme, themeMode: _themeMode),
+      debugShowCheckedModeBanner: false,
+      theme: appLightTheme,
+      darkTheme: appDarkTheme,
+      themeMode: ThemeMode.system,
+      home: AuthWrapper(onToggleTheme: () {}, themeMode: ThemeMode.system),
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),

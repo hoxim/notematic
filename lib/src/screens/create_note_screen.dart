@@ -2,16 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/notes_provider.dart';
 import '../providers/notebooks_provider.dart';
-import '../providers/user_provider.dart';
-import '../providers/ui_provider.dart';
 import '../providers/form_provider.dart';
-import '../providers/sync_provider.dart';
-import '../providers/logger_provider.dart';
-import '../providers/token_provider.dart';
 import '../providers/storage_provider.dart';
-import '../providers/simple_local_storage_provider.dart';
 import 'home_screen.dart'; // Dodany import dla CreateNotebookDialog
-import 'note_view_screen.dart'; // Dodany import dla NoteViewScreen
+// Dodany import dla NoteViewScreen
 
 class CreateNoteScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic>? noteToEdit;
@@ -200,6 +194,13 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
   void _saveNote() async {
     if (_formKey.currentState!.validate()) {
       try {
+        // Ensure default notebook exists
+        final storage = ref.read(unifiedStorageServiceProvider);
+        final defaultNotebook = await storage.ensureDefaultNotebook();
+
+        // Use default notebook if none selected
+        final notebookUuid = _selectedNotebookUuid ?? defaultNotebook.uuid;
+
         if (widget.noteToEdit != null) {
           // Update existing note
           await ref.read(notesProvider.notifier).updateNote(
@@ -207,7 +208,7 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
             {
               'title': _titleController.text.trim(),
               'content': _contentController.text.trim(),
-              'notebookUuid': _selectedNotebookUuid!,
+              'notebookUuid': notebookUuid,
             },
           );
           // Pobierz zaktualizowaną notatkę po uuid
@@ -227,7 +228,7 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
           await ref.read(notesProvider.notifier).createNote(
                 title: _titleController.text.trim(),
                 content: _contentController.text.trim(),
-                notebookUuid: _selectedNotebookUuid!,
+                notebookUuid: notebookUuid,
               );
           ref.read(createNoteFormProvider.notifier).reset();
           Navigator.of(context).pop();
