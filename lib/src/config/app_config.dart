@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../services/logger_service.dart';
 
 class AppConfig {
   // Helper method to get config from dotenv or use empty string
@@ -24,6 +25,7 @@ class AppConfig {
     }
     return host;
   }
+
   static int get apiPort => int.tryParse(_getEnv('API_PORT')) ?? 8080;
   static String get environment =>
       _getEnv('ENVIRONMENT').isNotEmpty ? _getEnv('ENVIRONMENT') : 'production';
@@ -54,16 +56,16 @@ class AppConfig {
   static String get notesEndpoint => '$apiBaseUrl/protected/notes';
 
   // Log configuration
-  static void logConfiguration() {
-    print('=== App Configuration ===');
-    print('Environment: $environment');
-    print('API Base URL: $apiBaseUrl');
-    print('API Host: $apiHost');
-    print('API Port: $apiPort');
-    print('Is Development: $isDevelopment');
-    print('Is Production: $isProduction');
-    print('Enable Auto Login On Web: $enableAutoLoginOnWeb');
-    print('Has Dev Tokens: $hasDevTokens');
-    print('========================');
+  static void logConfiguration(LoggerService logger) {
+    logger.info('=== App Configuration ===');
+    logger.info('Environment: $environment');
+    logger.info('API Base URL: $apiBaseUrl');
+    logger.info('API Host: $apiHost');
+    logger.info('API Port: $apiPort');
+    logger.info('Is Development: $isDevelopment');
+    logger.info('Is Production: $isProduction');
+    logger.info('Enable Auto Login On Web: $enableAutoLoginOnWeb');
+    logger.info('Has Dev Tokens: $hasDevTokens');
+    logger.info('========================');
   }
 }

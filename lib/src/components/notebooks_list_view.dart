@@ -40,8 +40,10 @@ class NotebooksListView extends ConsumerWidget {
                 Icon(
                   Icons.folder_outlined,
                   size: 64,
-                  color:
-                      Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.5),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -50,7 +52,7 @@ class NotebooksListView extends ConsumerWidget {
                         color: Theme.of(context)
                             .colorScheme
                             .onSurface
-                            .withOpacity(0.7),
+                            .withValues(alpha: 0.7),
                       ),
                 ),
                 const SizedBox(height: 8),
@@ -60,7 +62,7 @@ class NotebooksListView extends ConsumerWidget {
                         color: Theme.of(context)
                             .colorScheme
                             .onSurface
-                            .withOpacity(0.5),
+                            .withValues(alpha: 0.5),
                       ),
                 ),
               ],

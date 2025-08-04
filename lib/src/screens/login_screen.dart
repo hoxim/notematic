@@ -22,7 +22,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   late final TokenService _tokenService;
 
   // API status
-  String _apiStatus = 'checking';
   bool _isCheckingApi = false;
   bool _autoLogin = false;
 
@@ -45,13 +44,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       // Health check now uses Rust FFI (apiHealth)
       // TODO: Remove these lines and replace with proper HTTP health-check or remove API check section
-      setState(() {
-        _apiStatus = 'up'; // Placeholder for actual health check
-      });
+      // Placeholder for actual health check
     } catch (e) {
-      setState(() {
-        _apiStatus = 'down';
-      });
+      // Handle error
     } finally {
       setState(() {
         _isCheckingApi = false;

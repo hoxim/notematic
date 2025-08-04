@@ -75,11 +75,10 @@ class _NotebookDialogState extends ConsumerState<NotebookDialog> {
               spacing: 8,
               children: noteColors.asMap().entries.map((entry) {
                 final index = entry.key;
-                final colors = entry.value;
                 final isDark = Theme.of(context).brightness == Brightness.dark;
                 final color = getNotebookColor(index, isDark);
                 final hexColor =
-                    '#${color.value.toRadixString(16).substring(2)}';
+                    '#${color.toARGB32().toRadixString(16).substring(2)}';
 
                 return GestureDetector(
                   onTap: () {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'src/services/logger_service.dart';
+import 'src/providers/logger_provider.dart';
 import 'src/services/api_service.dart';
 import 'src/screens/home_screen.dart';
 import 'src/screens/create_note_screen.dart';
@@ -21,10 +21,12 @@ Future<void> main() async {
   // Load environment variables
   await dotenv.load(fileName: ".env");
 
-  final logger = LoggerService();
+  // Initialize logger through provider
+  final container = ProviderContainer();
+  final logger = container.read(loggerServiceProvider);
   logger.init();
   logger.info('Starting Notematic Flutter app');
-  AppConfig.logConfiguration();
+  AppConfig.logConfiguration(logger);
 
   logger.info('Initializing platform services');
   await UnifiedStorageService().initialize();

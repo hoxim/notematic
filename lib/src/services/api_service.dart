@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/unified_note.dart';
 import '../config/app_config.dart';
-import 'logger_service.dart';
+import '../providers/logger_provider.dart';
 import '../providers/user_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -125,7 +125,7 @@ class ApiService {
     bool enableLogging = true,
   }) async {
     final token = await getToken();
-    final logger = LoggerService();
+    final logger = ref.read(loggerServiceProvider);
 
     if (enableLogging) {
       if (token == null) {
@@ -235,7 +235,7 @@ class ApiService {
 
   /// Example login method
   Future<bool> login({required String email, required String password}) async {
-    final logger = LoggerService();
+    final logger = ref.read(loggerServiceProvider);
     logger.info('Login attempt for email: $email');
     try {
       final response = await post(
@@ -266,7 +266,7 @@ class ApiService {
     required String email,
     required String password,
   }) async {
-    final logger = LoggerService();
+    final logger = ref.read(loggerServiceProvider);
     logger.info('Register attempt for email: $email');
     try {
       final response = await post(

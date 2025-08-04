@@ -5,7 +5,6 @@ import '../providers/notebooks_provider.dart';
 import '../providers/user_provider.dart';
 import '../providers/ui_provider.dart';
 import '../providers/form_provider.dart';
-import '../providers/sync_provider.dart';
 import '../providers/storage_provider.dart';
 import '../components/notes_list_view.dart';
 import '../components/notebooks_list_view.dart';
@@ -17,6 +16,8 @@ import '../components/sync_toggle.dart';
 import 'note_view_screen.dart';
 import 'create_note_screen.dart';
 import '../providers/sync_service_provider.dart';
+import '../services/logger_service.dart';
+import '../providers/logger_provider.dart';
 
 /// Home screen that displays notes and notebooks
 /// Uses unified models and providers for state management
@@ -29,8 +30,9 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _showNotebooks = false;
-  final String _searchQuery = '';
   final _searchController = TextEditingController();
+
+  late final LoggerService logger;
 
   @override
   void initState() {
@@ -48,9 +50,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _initializeServices() async {
     try {
       final syncService = ref.read(unifiedSyncServiceProvider);
+      logger = ref.read(loggerServiceProvider);
       await syncService.initialize();
     } catch (e) {
-      // Handle initialization error
+      logger.error('Error initializing sync service: $e');
     }
   }
 
@@ -58,10 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final notesAsync = ref.watch(notesProvider);
     final notebooksAsync = ref.watch(notebooksProvider);
-    final syncEnabledAsync = ref.watch(syncEnabledProvider);
     final searchState = ref.watch(searchProvider);
-    final fabExpanded = ref.watch(fabExpandedProvider);
-    final userState = ref.watch(userProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -84,10 +84,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ref.read(notesProvider.notifier).refresh();
                 ref.read(notebooksProvider.notifier).refresh();
 
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Sync completed successfully')),
                 );
               } catch (e) {
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Sync failed: $e')),
                 );
@@ -111,7 +113,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
-      // NIE ustawiam backgroundColor, Scaffold użyje Theme.of(context).scaffoldBackgroundColor
       body: _buildBody(notesAsync, notebooksAsync, searchState),
       floatingActionButton: CreateFAB(
         animation: const AlwaysStoppedAnimation(1.0),
@@ -268,6 +269,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   /// Show create note dialog
   void _showCreateNoteDialog(BuildContext context) {
+    if (!context.mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const CreateNoteScreen()),
@@ -276,6 +278,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   /// Show create notebook dialog
   void _showCreateNotebookDialog(BuildContext context) {
+    if (!context.mounted) return;
     showDialog(
       context: context,
       builder: (context) => const CreateNotebookDialog(),
@@ -285,6 +288,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Show edit notebook dialog
   void _showEditNotebookDialog(
       BuildContext context, Map<String, dynamic> notebook) {
+    if (!context.mounted) return;
     showDialog(
       context: context,
       builder: (context) => CreateNotebookDialog(
@@ -296,6 +300,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Show delete notebook dialog
   void _showDeleteNotebookDialog(
       BuildContext context, Map<String, dynamic> notebook) {
+    if (!context.mounted) return;
     final isOffline = notebook['isOffline'] == true;
 
     showDialog(
@@ -342,7 +347,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                _deleteNotebookWhenOnline(notebook);
+                _deleteNotebookWhenOnline(context, notebook);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.orange,
@@ -371,7 +376,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   /// Delete notebook when online (mark for deletion)
-  void _deleteNotebookWhenOnline(Map<String, dynamic> notebook) async {
+  void _deleteNotebookWhenOnline(
+      BuildContext context, Map<String, dynamic> notebook) async {
     try {
       // Mark notebook for deletion when online
       final storage = ref.read(unifiedStorageServiceProvider);
@@ -380,6 +386,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         notebookObj.delete();
         await storage.updateNotebook(notebookObj);
 
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -388,6 +395,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         );
       }
     } catch (e) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to mark notebook for deletion: $e')),
       );
@@ -440,7 +448,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                _deleteNoteWhenOnline(note);
+                _deleteNoteWhenOnline(context, note);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.orange,
@@ -467,15 +475,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   /// Delete note when online (mark for deletion)
-  void _deleteNoteWhenOnline(Map<String, dynamic> note) async {
+  void _deleteNoteWhenOnline(
+      BuildContext context, Map<String, dynamic> note) async {
     try {
       // Mark note for deletion when online
       final storage = ref.read(unifiedStorageServiceProvider);
       final noteObj = await storage.getNoteByUuid(note['uuid']);
+
       if (noteObj != null) {
         noteObj.delete();
         await storage.updateNote(noteObj);
 
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content:
@@ -484,6 +495,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         );
       }
     } catch (e) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to mark note for deletion: $e')),
       );
@@ -497,11 +509,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       await syncService.syncSingleNotebook(notebook['uuid']);
       await ref.read(notebooksProvider.notifier).refresh();
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Notebook synchronized online!')),
       );
     } catch (e) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Sync failed: $e')),
       );
@@ -533,7 +546,6 @@ class _CreateNoteDialogState extends ConsumerState<CreateNoteDialog> {
   @override
   Widget build(BuildContext context) {
     final notebooksAsync = ref.watch(notebooksProvider);
-    final formState = ref.watch(createNoteFormProvider);
     final formNotifier = ref.read(createNoteFormProvider.notifier);
 
     return AlertDialog(
@@ -616,7 +628,7 @@ class _CreateNoteDialogState extends ConsumerState<CreateNoteDialog> {
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: formNotifier.isValid ? _createNote : null,
+          onPressed: formNotifier.isValid ? () => _createNote(context) : null,
           child: const Text('Create'),
         ),
       ],
@@ -624,7 +636,7 @@ class _CreateNoteDialogState extends ConsumerState<CreateNoteDialog> {
   }
 
   /// Create the note
-  void _createNote() async {
+  void _createNote(BuildContext context) async {
     if (_formKey.currentState!.validate()) {
       try {
         await ref.read(notesProvider.notifier).createNote(
@@ -634,12 +646,15 @@ class _CreateNoteDialogState extends ConsumerState<CreateNoteDialog> {
             );
 
         ref.read(createNoteFormProvider.notifier).reset();
+
+        if (!context.mounted) return;
         Navigator.of(context).pop();
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Note created successfully')),
         );
       } catch (e) {
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to create note: $e')),
         );
@@ -705,7 +720,6 @@ class _CreateNotebookDialogState extends ConsumerState<CreateNotebookDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final formState = ref.watch(notebookFormProvider);
     final formNotifier = ref.read(notebookFormProvider.notifier);
 
     return AlertDialog(
@@ -782,7 +796,8 @@ class _CreateNotebookDialogState extends ConsumerState<CreateNotebookDialog> {
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: formNotifier.isValid ? _createNotebook : null,
+          onPressed:
+              formNotifier.isValid ? () => _createNotebook(context) : null,
           child: Text(widget.notebookToEdit != null ? 'Update' : 'Create'),
         ),
       ],
@@ -790,7 +805,7 @@ class _CreateNotebookDialogState extends ConsumerState<CreateNotebookDialog> {
   }
 
   /// Create or update the notebook
-  void _createNotebook() async {
+  void _createNotebook(BuildContext context) async {
     if (_formKey.currentState!.validate()) {
       try {
         if (widget.notebookToEdit != null) {
@@ -805,6 +820,7 @@ class _CreateNotebookDialogState extends ConsumerState<CreateNotebookDialog> {
               'color': _selectedColor,
             },
           );
+          if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Notebook updated successfully')),
           );
@@ -817,6 +833,7 @@ class _CreateNotebookDialogState extends ConsumerState<CreateNotebookDialog> {
                     : _descriptionController.text.trim(),
                 color: _selectedColor,
               );
+          if (!context.mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Notebook created successfully')),
           );
@@ -825,6 +842,7 @@ class _CreateNotebookDialogState extends ConsumerState<CreateNotebookDialog> {
         ref.read(notebookFormProvider.notifier).reset();
         Navigator.of(context).pop();
       } catch (e) {
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to save notebook: $e')),
         );

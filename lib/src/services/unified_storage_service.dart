@@ -1,4 +1,5 @@
-import '../database/shared_db_executor.dart';
+import '../database/db_executor_native.dart'
+    if (dart.library.js_interop) '../database/db_executor_web.dart';
 import '../database/app_database.dart';
 import '../models/unified_note.dart';
 import '../models/unified_notebook.dart';
@@ -399,7 +400,6 @@ class UnifiedStorageService {
           // New note from server - add it
           await _saveNote(serverNote);
           added++;
-          _logger.info('Added new note from server: ${serverNote.title}');
         } else {
           // Compare versions
           final serverVersion = serverNote.serverVersion;
@@ -416,20 +416,14 @@ class UnifiedStorageService {
               // Server version is newer - update local
               await _saveNote(serverNote);
               updated++;
-              _logger.info(
-                  'Updated note from server (newer version): ${serverNote.title}');
             } else {
               // Local version is newer or same - skip
               skipped++;
-              _logger.info(
-                  'Skipped note (local version is newer or same): ${serverNote.title}');
             }
           } else {
             // No version info - update to be safe
             await _saveNote(serverNote);
             updated++;
-            _logger.info(
-                'Updated note from server (no version info): ${serverNote.title}');
           }
         }
       }

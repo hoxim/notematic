@@ -41,7 +41,7 @@ class UserProfileMenu extends ConsumerWidget {
             const SizedBox(width: 8),
             if (MediaQuery.of(context).size.width > 400)
               Text(
-                userEmail ?? 'User',
+                userEmail.isNotEmpty ? userEmail : 'User',
                 style: const TextStyle(fontWeight: FontWeight.w500),
               ),
             const SizedBox(width: 4),
@@ -56,7 +56,7 @@ class UserProfileMenu extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                userEmail ?? 'User',
+                userEmail.isNotEmpty ? userEmail : 'User',
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
@@ -65,8 +65,10 @@ class UserProfileMenu extends ConsumerWidget {
               Text(
                 'Signed in',
                 style: TextStyle(
-                  color:
-                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
                   fontSize: 12,
                 ),
               ),

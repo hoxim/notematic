@@ -10,7 +10,7 @@ final ThemeData appLightTheme = ThemeData.light().copyWith(
     onPrimary: kWhite, // Text/icons on primary color
     onSecondary: kWhite, // Text/icons on secondary color
     onSurface: kBlack, // Text/icons on background
-    outline: kBlack.withOpacity(0.26), // Borders, outlines
+    outline: kBlack.withValues(alpha: 0.26), // Borders, outlines
   ),
   // Card widget background and shape
   cardTheme: CardThemeData(
@@ -48,6 +48,7 @@ final ThemeData appLightTheme = ThemeData.light().copyWith(
       borderSide: BorderSide.none,
     ),
     labelStyle: TextStyle(color: kBlack), // Label text color
-    hintStyle: TextStyle(color: kBlack.withOpacity(0.54)), // Hint text color
+    hintStyle:
+        TextStyle(color: kBlack.withValues(alpha: 0.54)), // Hint text color
   ),
 );

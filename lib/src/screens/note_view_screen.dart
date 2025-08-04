@@ -18,6 +18,7 @@ class NoteViewScreen extends ConsumerStatefulWidget {
 
 class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
   late Map<String, dynamic> _note;
+  final GlobalKey<_NoteViewScreenState> widgetKey = GlobalKey();
 
   @override
   void initState() {
@@ -141,13 +142,13 @@ class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
                       color: Theme.of(context)
                           .colorScheme
                           .primary
-                          .withOpacity(0.1),
+                          .withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: Theme.of(context)
                             .colorScheme
                             .primary
-                            .withOpacity(0.3),
+                            .withValues(alpha: 0.3),
                         width: 1,
                       ),
                     ),
@@ -224,7 +225,7 @@ class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
                             color: Theme.of(context)
                                 .colorScheme
                                 .onSurface
-                                .withOpacity(0.6),
+                                .withValues(alpha: 0.6),
                           ),
                           const SizedBox(width: 8),
                           Text(
@@ -233,7 +234,7 @@ class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
                               color: Theme.of(context)
                                   .colorScheme
                                   .onSurface
-                                  .withOpacity(0.6),
+                                  .withValues(alpha: 0.6),
                             ),
                           ),
                         ],
@@ -249,7 +250,7 @@ class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
                             color: Theme.of(context)
                                 .colorScheme
                                 .onSurface
-                                .withOpacity(0.6),
+                                .withValues(alpha: 0.6),
                           ),
                           const SizedBox(width: 8),
                           Text(
@@ -258,7 +259,7 @@ class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
                               color: Theme.of(context)
                                   .colorScheme
                                   .onSurface
-                                  .withOpacity(0.6),
+                                  .withValues(alpha: 0.6),
                             ),
                           ),
                         ],
@@ -333,18 +334,21 @@ class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
 
   void _syncNote(BuildContext context) async {
     final syncService = ref.read(unifiedSyncServiceProvider);
+    final context = widgetKey.currentContext;
     try {
-      await syncService.syncSingleNote(_note['uuid']);
-      // Pobierz zaktualizowaną notatkę po sync
+      await syncService.syncSingleNote(
+          _note['uuid']); // Pobier zaktualizowaną notatkę po sync
       final updatedNote =
           await ref.read(notesProvider.notifier).getNoteByUuid(_note['uuid']);
       setState(() {
         _note = updatedNote;
       });
+      if (context == null || !context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Note synchronized online!')),
       );
     } catch (e) {
+      if (context == null || !context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Sync failed: $e')),
       );

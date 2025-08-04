@@ -85,33 +85,60 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
           child: ListView(
             children: [
               // --- NOTEBOOK DROPDOWN OR ADD BUTTON ---
-              if (notebooksAsync.hasValue && notebooksAsync.value!.isNotEmpty)
-                DropdownButtonFormField<String>(
-                  value: _selectedNotebookUuid,
-                  decoration: const InputDecoration(
-                    labelText: 'Notebook',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: notebooksAsync.value!.map((notebook) {
-                    return DropdownMenuItem<String>(
-                      value: notebook['uuid'] as String,
-                      child: Text(notebook['name'] as String? ?? 'Untitled'),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedNotebookUuid = value;
-                    });
-                    formNotifier.setNotebookUuid(value ?? '');
-                  },
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please select a notebook';
+              if (notebooksAsync.hasValue &&
+                  notebooksAsync.value!.isNotEmpty) ...[
+                // Validate that selected notebook exists in the list
+                Builder(
+                  builder: (context) {
+                    final validNotebooks = notebooksAsync.value!;
+                    final validUuid = _selectedNotebookUuid != null &&
+                            validNotebooks
+                                .any((n) => n['uuid'] == _selectedNotebookUuid)
+                        ? _selectedNotebookUuid
+                        : validNotebooks.first['uuid'] as String;
+
+                    // Update selected notebook if it was invalid
+                    if (_selectedNotebookUuid != validUuid) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        setState(() {
+                          _selectedNotebookUuid = validUuid;
+                        });
+                        formNotifier.setNotebookUuid(validUuid ?? '');
+                      });
                     }
-                    return null;
+
+                    return DropdownButtonFormField<String>(
+                      value: validUuid,
+                      decoration: const InputDecoration(
+                        labelText: 'Notebook',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: notebooksAsync.value!.map((notebook) {
+                        return DropdownMenuItem<String>(
+                          value: notebook['uuid'] as String,
+                          child:
+                              Text(notebook['name'] as String? ?? 'Untitled'),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() {
+                            _selectedNotebookUuid = value;
+                          });
+                          formNotifier.setNotebookUuid(value);
+                        }
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please select a notebook';
+                        }
+                        return null;
+                      },
+                    );
                   },
-                )
-              else if (notebooksAsync.hasValue && notebooksAsync.value!.isEmpty)
+                ),
+              ] else if (notebooksAsync.hasValue &&
+                  notebooksAsync.value!.isEmpty)
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -216,10 +243,10 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
               .read(notesProvider.notifier)
               .getNoteByUuid(widget.noteToEdit!['uuid']);
           ref.read(createNoteFormProvider.notifier).reset();
-          // Zamiast pushReplacement, pop z wynikiem
-          if (mounted) {
-            Navigator.of(context).pop(updatedNote);
-          }
+
+          // Sprawdź czy widget jest nadal mounted przed użyciem context
+          if (!mounted) return;
+          Navigator.of(context).pop(updatedNote);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Note updated successfully')),
           );
@@ -231,12 +258,16 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
                 notebookUuid: notebookUuid,
               );
           ref.read(createNoteFormProvider.notifier).reset();
+
+          // Sprawdź czy widget jest nadal mounted przed użyciem context
+          if (!mounted) return;
           Navigator.of(context).pop();
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Note created successfully')),
           );
         }
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to save note: $e')),
         );
