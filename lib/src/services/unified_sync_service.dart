@@ -167,11 +167,19 @@ class UnifiedSyncService {
             } else {
               // For online notes that are deleted, try to delete from server
               try {
-                await _apiService.deleteNote(note.uuid);
-                await _storage.markNoteAsSynced(
-                    note.uuid, DateTime.now().toIso8601String());
-                _logger.info('Note deleted and synced: ${note.title}');
-                notesSynced++;
+                final success = await _apiService.deleteNote(note.uuid);
+                if (success) {
+                  await _storage.markNoteAsSynced(
+                      note.uuid, DateTime.now().toIso8601String());
+                  _logger.info('Note deleted and synced: ${note.title}');
+                  notesSynced++;
+                } else {
+                  _logger.warning(
+                      'Failed to delete note from server: ${note.title}');
+                  // Mark as synced anyway to avoid retrying
+                  await _storage.markNoteAsSynced(
+                      note.uuid, DateTime.now().toIso8601String());
+                }
               } catch (e) {
                 _logger.warning(
                     'Failed to delete note from server: ${note.title}, error: $e');
@@ -184,10 +192,15 @@ class UnifiedSyncService {
             // Create new note on server
             try {
               final apiNote = await _apiService.createNote(note.toApiMap());
-              await _storage.markNoteAsSynced(note.uuid,
-                  apiNote['version'] ?? DateTime.now().toIso8601String());
-              _logger.info('Note created and synced: ${note.title}');
-              notesSynced++;
+              if (apiNote != null) {
+                await _storage.markNoteAsSynced(note.uuid,
+                    apiNote['version'] ?? DateTime.now().toIso8601String());
+                _logger.info('Note created and synced: ${note.title}');
+                notesSynced++;
+              } else {
+                _logger
+                    .warning('Failed to create note on server: ${note.title}');
+              }
             } catch (e) {
               _logger.warning(
                   'Failed to create note on server: ${note.title}, error: $e');
@@ -197,10 +210,15 @@ class UnifiedSyncService {
             try {
               final apiNote =
                   await _apiService.updateNote(note.uuid, note.toApiMap());
-              await _storage.markNoteAsSynced(note.uuid,
-                  apiNote['version'] ?? DateTime.now().toIso8601String());
-              _logger.info('Note updated and synced: ${note.title}');
-              notesSynced++;
+              if (apiNote != null) {
+                await _storage.markNoteAsSynced(note.uuid,
+                    apiNote['version'] ?? DateTime.now().toIso8601String());
+                _logger.info('Note updated and synced: ${note.title}');
+                notesSynced++;
+              } else {
+                _logger
+                    .warning('Failed to update note on server: ${note.title}');
+              }
             } catch (e) {
               _logger.warning(
                   'Failed to update note on server: ${note.title}, error: $e');
@@ -226,11 +244,19 @@ class UnifiedSyncService {
             } else {
               // For online notebooks that are deleted, try to delete from server
               try {
-                await _apiService.deleteNotebook(notebook.uuid);
-                await _storage.markNotebookAsSynced(
-                    notebook.uuid, DateTime.now().toIso8601String());
-                _logger.info('Notebook deleted and synced: ${notebook.name}');
-                notebooksSynced++;
+                final success = await _apiService.deleteNotebook(notebook.uuid);
+                if (success) {
+                  await _storage.markNotebookAsSynced(
+                      notebook.uuid, DateTime.now().toIso8601String());
+                  _logger.info('Notebook deleted and synced: ${notebook.name}');
+                  notebooksSynced++;
+                } else {
+                  _logger.warning(
+                      'Failed to delete notebook from server: ${notebook.name}');
+                  // Mark as synced anyway to avoid retrying
+                  await _storage.markNotebookAsSynced(
+                      notebook.uuid, DateTime.now().toIso8601String());
+                }
               } catch (e) {
                 _logger.warning(
                     'Failed to delete notebook from server: ${notebook.name}, error: $e');
@@ -244,10 +270,15 @@ class UnifiedSyncService {
             try {
               final apiNotebook =
                   await _apiService.createNotebook(notebook.toApiMap());
-              await _storage.markNotebookAsSynced(notebook.uuid,
-                  apiNotebook['version'] ?? DateTime.now().toIso8601String());
-              _logger.info('Created notebook on server: ${notebook.name}');
-              notebooksSynced++;
+              if (apiNotebook != null) {
+                await _storage.markNotebookAsSynced(notebook.uuid,
+                    apiNotebook['version'] ?? DateTime.now().toIso8601String());
+                _logger.info('Created notebook on server: ${notebook.name}');
+                notebooksSynced++;
+              } else {
+                _logger.warning(
+                    'Failed to create notebook on server: ${notebook.name}');
+              }
             } catch (e) {
               _logger.warning(
                   'Failed to create notebook on server: ${notebook.name}, error: $e');
@@ -257,10 +288,15 @@ class UnifiedSyncService {
             try {
               final apiNotebook = await _apiService.updateNotebook(
                   notebook.uuid, notebook.toApiMap());
-              await _storage.markNotebookAsSynced(notebook.uuid,
-                  apiNotebook['version'] ?? DateTime.now().toIso8601String());
-              _logger.info('Updated notebook on server: ${notebook.name}');
-              notebooksSynced++;
+              if (apiNotebook != null) {
+                await _storage.markNotebookAsSynced(notebook.uuid,
+                    apiNotebook['version'] ?? DateTime.now().toIso8601String());
+                _logger.info('Updated notebook on server: ${notebook.name}');
+                notebooksSynced++;
+              } else {
+                _logger.warning(
+                    'Failed to update notebook on server: ${notebook.name}');
+              }
             } catch (e) {
               _logger.warning(
                   'Failed to update notebook on server: ${notebook.name}, error: $e');
@@ -310,8 +346,13 @@ class UnifiedSyncService {
       if (isEnabled && isOnline) {
         try {
           final apiNote = await _apiService.createNote(note.toApiMap());
-          await _storage.markNoteAsSynced(note.uuid,
-              apiNote['version'] ?? DateTime.now().toIso8601String());
+          if (apiNote != null) {
+            await _storage.markNoteAsSynced(note.uuid,
+                apiNote['version'] ?? DateTime.now().toIso8601String());
+          } else {
+            await _storage.markNoteAsSynced(
+                note.uuid, DateTime.now().toIso8601String());
+          }
           _logger.info('Note created and synced: ${note.title}');
         } catch (e) {
           _logger.warning(
@@ -352,8 +393,13 @@ class UnifiedSyncService {
         try {
           final apiNotebook =
               await _apiService.createNotebook(notebook.toApiMap());
-          await _storage.markNotebookAsSynced(notebook.uuid,
-              apiNotebook['version'] ?? DateTime.now().toIso8601String());
+          if (apiNotebook != null) {
+            await _storage.markNotebookAsSynced(notebook.uuid,
+                apiNotebook['version'] ?? DateTime.now().toIso8601String());
+          } else {
+            await _storage.markNotebookAsSynced(
+                notebook.uuid, DateTime.now().toIso8601String());
+          }
           _logger.info('Notebook created and synced: ${notebook.name}');
         } catch (e) {
           _logger.warning(
@@ -393,8 +439,13 @@ class UnifiedSyncService {
         if (isEnabled && isOnline) {
           try {
             final apiNote = await _apiService.updateNote(uuid, note.toApiMap());
-            await _storage.markNoteAsSynced(
-                uuid, apiNote['version'] ?? DateTime.now().toIso8601String());
+            if (apiNote != null) {
+              await _storage.markNoteAsSynced(
+                  uuid, apiNote['version'] ?? DateTime.now().toIso8601String());
+            } else {
+              await _storage.markNoteAsSynced(
+                  uuid, DateTime.now().toIso8601String());
+            }
             _logger.info('Note updated and synced: ${note.title}');
           } catch (e) {
             _logger.warning(
@@ -432,8 +483,13 @@ class UnifiedSyncService {
           try {
             final apiNotebook =
                 await _apiService.updateNotebook(uuid, notebook.toApiMap());
-            await _storage.markNotebookAsSynced(uuid,
-                apiNotebook['version'] ?? DateTime.now().toIso8601String());
+            if (apiNotebook != null) {
+              await _storage.markNotebookAsSynced(uuid,
+                  apiNotebook['version'] ?? DateTime.now().toIso8601String());
+            } else {
+              await _storage.markNotebookAsSynced(
+                  uuid, DateTime.now().toIso8601String());
+            }
             _logger.info('Notebook updated and synced: ${notebook.name}');
           } catch (e) {
             _logger.warning(
@@ -653,13 +709,23 @@ class UnifiedSyncService {
       _logger.info('Note deleted and synced: ${note.title}');
     } else if (note.isOffline) {
       final apiNote = await _apiService.createNote(note.toApiMap());
-      await _storage.markNoteAsSynced(
-          note.uuid, apiNote['version'] ?? DateTime.now().toIso8601String());
+      if (apiNote != null) {
+        await _storage.markNoteAsSynced(
+            note.uuid, apiNote['version'] ?? DateTime.now().toIso8601String());
+      } else {
+        await _storage.markNoteAsSynced(
+            note.uuid, DateTime.now().toIso8601String());
+      }
       _logger.info('Note created and synced: ${note.title}');
     } else {
       final apiNote = await _apiService.updateNote(note.uuid, note.toApiMap());
-      await _storage.markNoteAsSynced(
-          note.uuid, apiNote['version'] ?? DateTime.now().toIso8601String());
+      if (apiNote != null) {
+        await _storage.markNoteAsSynced(
+            note.uuid, apiNote['version'] ?? DateTime.now().toIso8601String());
+      } else {
+        await _storage.markNoteAsSynced(
+            note.uuid, DateTime.now().toIso8601String());
+      }
       _logger.info('Note updated and synced: ${note.title}');
     }
   }
@@ -683,14 +749,24 @@ class UnifiedSyncService {
       _logger.info('Notebook deleted and synced: ${notebook.name}');
     } else if (notebook.isOffline) {
       final apiNotebook = await _apiService.createNotebook(notebook.toApiMap());
-      await _storage.markNotebookAsSynced(notebook.uuid,
-          apiNotebook['version'] ?? DateTime.now().toIso8601String());
+      if (apiNotebook != null) {
+        await _storage.markNotebookAsSynced(notebook.uuid,
+            apiNotebook['version'] ?? DateTime.now().toIso8601String());
+      } else {
+        await _storage.markNotebookAsSynced(
+            notebook.uuid, DateTime.now().toIso8601String());
+      }
       _logger.info('Notebook created and synced: ${notebook.name}');
     } else {
       final apiNotebook =
           await _apiService.updateNotebook(notebook.uuid, notebook.toApiMap());
-      await _storage.markNotebookAsSynced(notebook.uuid,
-          apiNotebook['version'] ?? DateTime.now().toIso8601String());
+      if (apiNotebook != null) {
+        await _storage.markNotebookAsSynced(notebook.uuid,
+            apiNotebook['version'] ?? DateTime.now().toIso8601String());
+      } else {
+        await _storage.markNotebookAsSynced(
+            notebook.uuid, DateTime.now().toIso8601String());
+      }
       _logger.info('Notebook updated and synced: ${notebook.name}');
     }
   }

@@ -82,8 +82,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _isLoading = true;
       _errorMessage = null;
     });
-    final success = await _apiService.login(email: email, password: password);
-    if (success) {
+    final loginResponse = await _apiService.login(email: email, password: password);
+    if (loginResponse != null) {
       await _tokenService.saveUserEmail(email);
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/home');

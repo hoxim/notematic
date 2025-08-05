@@ -15,6 +15,7 @@ import '../components/create_fab.dart';
 import '../components/sync_toggle.dart';
 import 'note_view_screen.dart';
 import 'create_note_screen.dart';
+import 'about_screen.dart';
 import '../providers/sync_service_provider.dart';
 import '../services/logger_service.dart';
 import '../providers/logger_provider.dart';
@@ -105,7 +106,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               // Handle settings tap
             },
             onAboutTap: () {
-              // Handle about tap
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const AboutScreen(),
+                ),
+              );
             },
             onLogoutTap: () {
               ref.read(userProvider.notifier).logout();

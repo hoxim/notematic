@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/unified_note.dart';
+import '../models/login_response.dart';
 import '../config/app_config.dart';
 import '../providers/logger_provider.dart';
 import '../providers/user_provider.dart';
@@ -64,7 +65,7 @@ class ApiService {
   /// Refresh the access token
   Future<bool> _refreshToken() async {
     try {
-      final response = await post('/auth/refresh');
+      final response = await post('/refresh');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         await setToken(data['access_token']);
@@ -196,45 +197,256 @@ class ApiService {
     );
   }
 
-  /// Push local notes to API
-  Future<bool> syncNotes(List<UnifiedNote> notes) async {
-    final response = await post(
-      '/notes/sync',
-      body: jsonEncode(
-        notes
-            .map(
-              (n) => {
-                'uuid': n.uuid,
-                'title': n.title,
-                'content': n.content,
-                'notebookUuid': n.notebookUuid,
-                'notebookName': n.notebookName,
-                'updatedAt': n.updatedAt.toIso8601String(),
-                'deleted': n.deleted,
-              },
-            )
-            .toList(),
-      ),
-    );
-    return response.statusCode == 200;
+  // ===== NEW API METHODS =====
+
+  /// Get all notebooks from API
+  Future<List<Map<String, dynamic>>> getNotebooks() async {
+    try {
+      final response = await get('/notebooks');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic> && data.containsKey('notebooks')) {
+          return (data['notebooks'] as List).cast<Map<String, dynamic>>();
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
   }
 
-  /// Pull notes changed since lastSync from API
-  Future<List<Map<String, dynamic>>> getNotesChangedSince(
-    DateTime lastSync,
-  ) async {
-    final response = await get(
-      '/notes/changes?since=${lastSync.toIso8601String()}',
-    );
-    if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
-      return data.cast<Map<String, dynamic>>();
+  /// Get single notebook from API
+  Future<Map<String, dynamic>?> getNotebook(String uuid) async {
+    try {
+      final response = await get('/notebooks/$uuid');
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
     }
-    return [];
+  }
+
+  /// Create notebook on API
+  Future<Map<String, dynamic>?> createNotebook(
+      Map<String, dynamic> notebookData) async {
+    try {
+      final response = await post('/notebooks', body: notebookData);
+      if (response.statusCode == 201) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Update notebook on API
+  Future<Map<String, dynamic>?> updateNotebook(
+      String uuid, Map<String, dynamic> notebookData) async {
+    try {
+      final response = await put('/notebooks/$uuid', body: notebookData);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Delete notebook from API
+  Future<bool> deleteNotebook(String uuid) async {
+    try {
+      final response = await delete('/notebooks/$uuid');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Get all notes from API
+  Future<List<Map<String, dynamic>>> getNotes() async {
+    try {
+      final response = await get('/notes');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic> && data.containsKey('notes')) {
+          return (data['notes'] as List).cast<Map<String, dynamic>>();
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Get notes from specific notebook
+  Future<List<Map<String, dynamic>>> getNotesFromNotebook(
+      String notebookUuid) async {
+    try {
+      final response = await get('/notebooks/$notebookUuid/notes');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic> && data.containsKey('notes')) {
+          return (data['notes'] as List).cast<Map<String, dynamic>>();
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// Get single note from API
+  Future<Map<String, dynamic>?> getNote(String uuid) async {
+    try {
+      final response = await get('/notes/$uuid');
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Create note on API
+  Future<Map<String, dynamic>?> createNote(
+      Map<String, dynamic> noteData) async {
+    try {
+      final response = await post('/notes', body: noteData);
+      if (response.statusCode == 201) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Create note in specific notebook
+  Future<Map<String, dynamic>?> createNoteInNotebook(
+      String notebookUuid, Map<String, dynamic> noteData) async {
+    try {
+      final response =
+          await post('/notebooks/$notebookUuid/notes', body: noteData);
+      if (response.statusCode == 201) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Update note on API
+  Future<Map<String, dynamic>?> updateNote(
+      String uuid, Map<String, dynamic> noteData) async {
+    try {
+      final response = await put('/notes/$uuid', body: noteData);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Delete note from API
+  Future<bool> deleteNote(String uuid) async {
+    try {
+      final response = await delete('/notes/$uuid');
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Sync notes with API
+  Future<Map<String, dynamic>?> syncNotes(
+      List<Map<String, dynamic>> changes) async {
+    try {
+      final syncData = {
+        'last_sync': null, // TODO: implement last sync tracking
+        'device_id': 'flutter_app',
+        'changes': changes,
+      };
+
+      final response = await post('/sync/notes', body: syncData);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Sync notebooks with API
+  Future<Map<String, dynamic>?> syncNotebooks(
+      List<Map<String, dynamic>> changes) async {
+    try {
+      final syncData = {
+        'last_sync': null, // TODO: implement last sync tracking
+        'device_id': 'flutter_app',
+        'changes': changes,
+      };
+
+      final response = await post('/sync/notebooks', body: syncData);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Get sync status
+  Future<Map<String, dynamic>?> getSyncStatus() async {
+    try {
+      final response = await get('/sync/status');
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ===== LEGACY METHODS (for backward compatibility) =====
+
+  /// Legacy method - now uses new API
+  Future<bool> syncNotesLegacy(List<UnifiedNote> notes) async {
+    final changes = notes
+        .map((note) => {
+              'uuid': note.uuid,
+              'title': note.title,
+              'content': note.content,
+              'notebookUuid': note.notebookUuid,
+              'notebookName': note.notebookName,
+              'updatedAt': note.updatedAt.toIso8601String(),
+              'deleted': note.deleted,
+            })
+        .toList();
+
+    final result = await syncNotes(changes);
+    return result != null;
+  }
+
+  /// Legacy method - now uses new API
+  Future<List<Map<String, dynamic>>> getNotesChangedSince(
+      DateTime lastSync) async {
+    // TODO: implement proper change tracking
+    return await getNotes();
   }
 
   /// Example login method
-  Future<bool> login({required String email, required String password}) async {
+  Future<LoginResponse?> login({required String email, required String password}) async {
     final logger = ref.read(loggerServiceProvider);
     logger.info('Login attempt for email: $email');
     try {
@@ -244,12 +456,19 @@ class ApiService {
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        await setToken(data['access_token']);
+        final loginResponse = LoginResponse.fromJson(data);
+        
+        await setToken(loginResponse.accessToken);
         logger.info('Login successful for email: $email');
-        logger.info(
-          'JWT access_token: ${data['access_token']}',
-        ); // Dodaj logowanie tokena
-        return true;
+        
+        // Log API version information
+        if (loginResponse.isApiVersionCompatible) {
+          logger.info('API version compatible: ${loginResponse.apiVersion}');
+        } else {
+          logger.warning('API version incompatible: ${loginResponse.apiVersion}');
+        }
+        
+        return loginResponse;
       } else {
         logger.warning(
           'Login failed for email: $email, status: ${response.statusCode}, body: ${response.body}',
@@ -258,7 +477,7 @@ class ApiService {
     } catch (e, st) {
       logger.error('Login error for email: $email', e, st);
     }
-    return false;
+    return null;
   }
 
   /// Example register method
@@ -302,121 +521,52 @@ class ApiService {
     }
   }
 
+  /// Get API version information
+  Future<Map<String, dynamic>?> getApiVersion() async {
+    try {
+      final response = await get('/version', enableLogging: false);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Get API status information
+  Future<Map<String, dynamic>?> getApiStatus() async {
+    try {
+      final response = await get('/status', enableLogging: false);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Check if API version is compatible
+  Future<bool> isApiVersionCompatible() async {
+    try {
+      final versionInfo = await getApiVersion();
+      if (versionInfo != null) {
+        final apiVersion = versionInfo['version'] as String?;
+        if (apiVersion != null) {
+          // Simple version check - can be enhanced with semantic versioning
+          return apiVersion == '1.0.0';
+        }
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   /// Check if online mode is available (alias for isApiAvailable)
   Future<bool> isOnline() async {
     return await isApiAvailable();
-  }
-
-  /// Get all notes from API
-  Future<List<Map<String, dynamic>>> getNotes() async {
-    try {
-      final response = await get('/protected/notes');
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data is Map<String, dynamic> && data.containsKey('notes')) {
-          return (data['notes'] as List).cast<Map<String, dynamic>>();
-        }
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  /// Get all notebooks from API
-  Future<List<Map<String, dynamic>>> getNotebooks() async {
-    try {
-      final response = await get('/protected/notebooks');
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data is Map<String, dynamic> && data.containsKey('notebooks')) {
-          return (data['notebooks'] as List).cast<Map<String, dynamic>>();
-        }
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  /// Create note on API
-  Future<Map<String, dynamic>> createNote(Map<String, dynamic> noteData) async {
-    try {
-      final response = await post('/protected/notes', body: noteData);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return jsonDecode(response.body);
-      }
-      throw Exception('Failed to create note: ${response.statusCode}');
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  /// Update note on API
-  Future<Map<String, dynamic>> updateNote(
-      String uuid, Map<String, dynamic> noteData) async {
-    try {
-      final response = await put('/protected/notes/$uuid', body: noteData);
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      }
-      throw Exception('Failed to update note: ${response.statusCode}');
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  /// Create notebook on API
-  Future<Map<String, dynamic>> createNotebook(
-      Map<String, dynamic> notebookData) async {
-    try {
-      final response = await post('/protected/notebooks', body: notebookData);
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        return jsonDecode(response.body);
-      }
-      throw Exception('Failed to create notebook: ${response.statusCode}');
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  /// Update notebook on API
-  Future<Map<String, dynamic>> updateNotebook(
-      String uuid, Map<String, dynamic> notebookData) async {
-    try {
-      final response =
-          await put('/protected/notebooks/$uuid', body: notebookData);
-      if (response.statusCode == 200) {
-        return jsonDecode(response.body);
-      }
-      throw Exception('Failed to update notebook: ${response.statusCode}');
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  /// Delete note from API
-  Future<void> deleteNote(String uuid) async {
-    try {
-      final response = await delete('/protected/notes/$uuid');
-      if (response.statusCode != 200 && response.statusCode != 204) {
-        throw Exception('Failed to delete note: ${response.statusCode}');
-      }
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  /// Delete notebook from API
-  Future<void> deleteNotebook(String uuid) async {
-    try {
-      final response = await delete('/protected/notebooks/$uuid');
-      if (response.statusCode != 200 && response.statusCode != 204) {
-        throw Exception('Failed to delete notebook: ${response.statusCode}');
-      }
-    } catch (e) {
-      rethrow;
-    }
   }
 
   Future<void> checkAndSetLoginStatus() async {
