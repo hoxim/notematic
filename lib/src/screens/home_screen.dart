@@ -6,16 +6,19 @@ import '../providers/user_provider.dart';
 import '../providers/ui_provider.dart';
 import '../providers/form_provider.dart';
 import '../providers/storage_provider.dart';
-import '../components/notes_list_view.dart';
+import '../components/notes_grid_view.dart';
+import '../components/notes_sectioned_view.dart';
 import '../components/notebooks_list_view.dart';
 import '../components/search_bar.dart';
 import '../components/search_results_list.dart';
 import '../components/user_profile_menu.dart';
 import '../components/create_fab.dart';
 import '../components/sync_toggle.dart';
+import '../components/share_note_dialog.dart';
 import 'note_view_screen.dart';
 import 'create_note_screen.dart';
 import 'about_screen.dart';
+import 'shared_notes_screen.dart';
 import '../providers/sync_service_provider.dart';
 import '../services/logger_service.dart';
 import '../providers/logger_provider.dart';
@@ -104,6 +107,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             },
             onSettingsTap: () {
               // Handle settings tap
+            },
+            onSharedNotesTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const SharedNotesScreen(),
+                ),
+              );
             },
             onAboutTap: () {
               Navigator.of(context).push(
@@ -215,6 +225,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ],
           ),
         ),
+        // View mode toggle (only for notes)
+        if (!_showNotebooks)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Consumer(
+                  builder: (context, ref, child) {
+                    final viewMode = ref.watch(viewModeProvider);
+                    return Row(
+                      children: [
+                        IconButton(
+                          onPressed: () => ref
+                              .read(viewModeProvider.notifier)
+                              .setViewMode(ViewMode.grid),
+                          icon: Icon(
+                            Icons.grid_view,
+                            color: viewMode == ViewMode.grid
+                                ? Theme.of(context).primaryColor
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.6),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => ref
+                              .read(viewModeProvider.notifier)
+                              .setViewMode(ViewMode.sections),
+                          icon: Icon(
+                            Icons.folder,
+                            color: viewMode == ViewMode.sections
+                                ? Theme.of(context).primaryColor
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
         // Content
         Expanded(
           child: _showNotebooks
@@ -236,34 +293,60 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     _syncNotebook(context, notebook);
                   },
                 )
-              : NotesListView(
-                  onNoteTap: (note) {
-                    // Navigate to note view screen
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => NoteViewScreen(note: note),
-                      ),
-                    );
-                  },
-                  onDeleteNote: (note) {
-                    // Handle note delete
-                    _showDeleteNoteDialog(context, note);
-                  },
-                  onSyncNote: (note) async {
-                    final syncService = ref.read(unifiedSyncServiceProvider);
-                    try {
-                      await syncService.syncSingleNote(note['uuid']);
-                      await ref.read(notesProvider.notifier).refresh();
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text('Note synchronized online!')),
-                      );
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Sync failed: $e')),
-                      );
+              : Consumer(
+                  builder: (context, ref, child) {
+                    final viewMode = ref.watch(viewModeProvider);
+
+                    final noteCallbacks = {
+                      'onNoteTap': (note) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => NoteViewScreen(note: note),
+                          ),
+                        );
+                      },
+                      'onDeleteNote': (note) {
+                        _showDeleteNoteDialog(context, note);
+                      },
+                      'onShareNote': (note) {
+                        _showShareNoteDialog(context, note);
+                      },
+                      'onSyncNote': (note) async {
+                        final syncService =
+                            ref.read(unifiedSyncServiceProvider);
+                        try {
+                          await syncService.syncSingleNote(note['uuid']);
+                          await ref.read(notesProvider.notifier).refresh();
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Note synchronized online!')),
+                          );
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Sync failed: $e')),
+                          );
+                        }
+                      },
+                    };
+
+                    switch (viewMode) {
+                      case ViewMode.grid:
+                        return NotesGridView(
+                          onNoteTap: noteCallbacks['onNoteTap']!,
+                          onDeleteNote: noteCallbacks['onDeleteNote']!,
+                          onShareNote: noteCallbacks['onShareNote']!,
+                          onSyncNote: noteCallbacks['onSyncNote']!,
+                        );
+                      case ViewMode.sections:
+                        return NotesSectionedView(
+                          onNoteTap: noteCallbacks['onNoteTap']!,
+                          onDeleteNote: noteCallbacks['onDeleteNote']!,
+                          onShareNote: noteCallbacks['onShareNote']!,
+                          onSyncNote: noteCallbacks['onSyncNote']!,
+                        );
                     }
                   },
                 ),
@@ -524,6 +607,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         SnackBar(content: Text('Sync failed: $e')),
       );
     }
+  }
+
+  /// Show share note dialog
+  void _showShareNoteDialog(BuildContext context, Map<String, dynamic> note) {
+    if (!context.mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => ShareNoteDialog(
+        noteId: note['uuid'] ?? '',
+        noteTitle: note['title'] ?? 'Untitled',
+      ),
+    );
   }
 }
 

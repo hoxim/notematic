@@ -77,3 +77,33 @@ class SearchState {
     );
   }
 }
+
+// View mode provider for switching between list and grid views
+final viewModeProvider =
+    StateNotifierProvider<ViewModeNotifier, ViewMode>((ref) {
+  return ViewModeNotifier();
+});
+
+class ViewModeNotifier extends StateNotifier<ViewMode> {
+  ViewModeNotifier() : super(ViewMode.grid);
+
+  void toggleViewMode() {
+    switch (state) {
+      case ViewMode.grid:
+        state = ViewMode.sections;
+        break;
+      case ViewMode.sections:
+        state = ViewMode.grid;
+        break;
+    }
+  }
+
+  void setViewMode(ViewMode mode) {
+    state = mode;
+  }
+}
+
+enum ViewMode {
+  grid,
+  sections,
+}

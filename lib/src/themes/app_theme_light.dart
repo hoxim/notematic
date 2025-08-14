@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'app_colors.dart';
 
 final ThemeData appLightTheme = ThemeData.light().copyWith(
+  // Use Lato font family
+  textTheme: GoogleFonts.latoTextTheme(ThemeData.light().textTheme),
+
   // Main color palette for light mode
   colorScheme: ColorScheme.light(
     primary: kPink, // Main accent color (buttons, highlights)

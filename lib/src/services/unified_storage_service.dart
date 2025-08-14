@@ -4,7 +4,8 @@ import '../database/app_database.dart';
 import '../models/unified_note.dart';
 import '../models/unified_notebook.dart';
 import 'logger_service.dart';
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show Value, QueryExecutor;
+import 'package:meta/meta.dart';
 import 'package:uuid/uuid.dart';
 
 /// Unified storage service using Drift for local database
@@ -27,6 +28,12 @@ class UnifiedStorageService {
       _logger.error('Failed to initialize UnifiedStorageService: $e');
       rethrow;
     }
+  }
+
+  /// Initialize with a provided executor (for tests)
+  @visibleForTesting
+  Future<void> initializeWithExecutor(QueryExecutor executor) async {
+    _db = AppDatabase(executor);
   }
 
   AppDatabase get db {
@@ -125,7 +132,7 @@ class UnifiedStorageService {
     try {
       final oldNotebookName = note.notebookName;
       final oldNotebookUuid = note.notebookUuid;
-      // Jeśli notebookUuid się zmienił, pobierz nową nazwę notebooka
+      // If notebookUuid changed, get new notebook name
       final notebook = await getNotebookByUuid(note.notebookUuid);
       note.notebookName = notebook?.name ?? note.notebookName;
       _logger.info(

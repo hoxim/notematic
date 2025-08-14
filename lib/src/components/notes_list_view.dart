@@ -7,12 +7,14 @@ class NotesListView extends ConsumerWidget {
   final Function(Map<String, dynamic>) onNoteTap;
   final Function(Map<String, dynamic>)? onDeleteNote;
   final Function(Map<String, dynamic>)? onSyncNote;
+  final Function(Map<String, dynamic>)? onShareNote;
 
   const NotesListView({
     super.key,
     required this.onNoteTap,
     this.onDeleteNote,
     this.onSyncNote,
+    this.onShareNote,
   });
 
   @override
@@ -161,6 +163,9 @@ class NotesListView extends ConsumerWidget {
                   icon: const Icon(Icons.more_vert),
                   onSelected: (value) {
                     switch (value) {
+                      case 'share':
+                        onShareNote?.call(note);
+                        break;
                       case 'delete':
                         onDeleteNote?.call(note);
                         break;
@@ -170,6 +175,16 @@ class NotesListView extends ConsumerWidget {
                     }
                   },
                   itemBuilder: (context) => [
+                    const PopupMenuItem<String>(
+                      value: 'share',
+                      child: Row(
+                        children: [
+                          Icon(Icons.share, size: 20),
+                          SizedBox(width: 8),
+                          Text('Share note'),
+                        ],
+                      ),
+                    ),
                     if (note['isOffline'] == true)
                       const PopupMenuItem<String>(
                         value: 'sync',

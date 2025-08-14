@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/unified_note.dart';
 import '../models/login_response.dart';
+import '../models/share_models.dart';
 import '../config/app_config.dart';
 import '../providers/logger_provider.dart';
 import '../providers/user_provider.dart';
@@ -201,29 +202,43 @@ class ApiService {
 
   /// Get all notebooks from API
   Future<List<Map<String, dynamic>>> getNotebooks() async {
+    final logger = ref.read(loggerServiceProvider);
+    logger.info('Fetching notebooks from API');
+
     try {
       final response = await get('/notebooks');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data is Map<String, dynamic> && data.containsKey('notebooks')) {
-          return (data['notebooks'] as List).cast<Map<String, dynamic>>();
+          final notebooks =
+              (data['notebooks'] as List).cast<Map<String, dynamic>>();
+          logger.info('Successfully fetched ${notebooks.length} notebooks');
+          return notebooks;
         }
       }
+      logger.warning('Failed to fetch notebooks: ${response.statusCode}');
       return [];
     } catch (e) {
+      logger.error('Error fetching notebooks', e);
       return [];
     }
   }
 
   /// Get single notebook from API
   Future<Map<String, dynamic>?> getNotebook(String uuid) async {
+    final logger = ref.read(loggerServiceProvider);
+    logger.info('Fetching notebook: $uuid');
+
     try {
       final response = await get('/notebooks/$uuid');
       if (response.statusCode == 200) {
+        logger.info('Successfully fetched notebook: $uuid');
         return jsonDecode(response.body);
       }
+      logger.warning('Failed to fetch notebook $uuid: ${response.statusCode}');
       return null;
     } catch (e) {
+      logger.error('Error fetching notebook $uuid', e);
       return null;
     }
   }
@@ -231,13 +246,22 @@ class ApiService {
   /// Create notebook on API
   Future<Map<String, dynamic>?> createNotebook(
       Map<String, dynamic> notebookData) async {
+    final logger = ref.read(loggerServiceProvider);
+    final notebookName = notebookData['name'] ?? 'Unknown';
+    logger.info('Creating notebook: $notebookName');
+
     try {
       final response = await post('/notebooks', body: notebookData);
       if (response.statusCode == 201) {
-        return jsonDecode(response.body);
+        final result = jsonDecode(response.body);
+        logger.info('Successfully created notebook: $notebookName');
+        return result;
       }
+      logger.warning(
+          'Failed to create notebook $notebookName: ${response.statusCode}');
       return null;
     } catch (e) {
+      logger.error('Error creating notebook $notebookName', e);
       return null;
     }
   }
@@ -245,39 +269,64 @@ class ApiService {
   /// Update notebook on API
   Future<Map<String, dynamic>?> updateNotebook(
       String uuid, Map<String, dynamic> notebookData) async {
+    final logger = ref.read(loggerServiceProvider);
+    final notebookName = notebookData['name'] ?? 'Unknown';
+    logger.info('Updating notebook: $notebookName ($uuid)');
+
     try {
       final response = await put('/notebooks/$uuid', body: notebookData);
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final result = jsonDecode(response.body);
+        logger.info('Successfully updated notebook: $notebookName');
+        return result;
       }
+      logger.warning(
+          'Failed to update notebook $notebookName: ${response.statusCode}');
       return null;
     } catch (e) {
+      logger.error('Error updating notebook $notebookName', e);
       return null;
     }
   }
 
   /// Delete notebook from API
   Future<bool> deleteNotebook(String uuid) async {
+    final logger = ref.read(loggerServiceProvider);
+    logger.info('Deleting notebook: $uuid');
+
     try {
       final response = await delete('/notebooks/$uuid');
-      return response.statusCode == 200;
+      if (response.statusCode == 200) {
+        logger.info('Successfully deleted notebook: $uuid');
+        return true;
+      }
+      logger.warning('Failed to delete notebook $uuid: ${response.statusCode}');
+      return false;
     } catch (e) {
+      logger.error('Error deleting notebook $uuid', e);
       return false;
     }
   }
 
   /// Get all notes from API
   Future<List<Map<String, dynamic>>> getNotes() async {
+    final logger = ref.read(loggerServiceProvider);
+    logger.info('Fetching notes from API');
+
     try {
       final response = await get('/notes');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data is Map<String, dynamic> && data.containsKey('notes')) {
-          return (data['notes'] as List).cast<Map<String, dynamic>>();
+          final notes = (data['notes'] as List).cast<Map<String, dynamic>>();
+          logger.info('Successfully fetched ${notes.length} notes');
+          return notes;
         }
       }
+      logger.warning('Failed to fetch notes: ${response.statusCode}');
       return [];
     } catch (e) {
+      logger.error('Error fetching notes', e);
       return [];
     }
   }
@@ -285,29 +334,44 @@ class ApiService {
   /// Get notes from specific notebook
   Future<List<Map<String, dynamic>>> getNotesFromNotebook(
       String notebookUuid) async {
+    final logger = ref.read(loggerServiceProvider);
+    logger.info('Fetching notes from notebook: $notebookUuid');
+
     try {
       final response = await get('/notebooks/$notebookUuid/notes');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data is Map<String, dynamic> && data.containsKey('notes')) {
-          return (data['notes'] as List).cast<Map<String, dynamic>>();
+          final notes = (data['notes'] as List).cast<Map<String, dynamic>>();
+          logger.info(
+              'Successfully fetched ${notes.length} notes from notebook: $notebookUuid');
+          return notes;
         }
       }
+      logger.warning(
+          'Failed to fetch notes from notebook $notebookUuid: ${response.statusCode}');
       return [];
     } catch (e) {
+      logger.error('Error fetching notes from notebook $notebookUuid', e);
       return [];
     }
   }
 
   /// Get single note from API
   Future<Map<String, dynamic>?> getNote(String uuid) async {
+    final logger = ref.read(loggerServiceProvider);
+    logger.info('Fetching note: $uuid');
+
     try {
       final response = await get('/notes/$uuid');
       if (response.statusCode == 200) {
+        logger.info('Successfully fetched note: $uuid');
         return jsonDecode(response.body);
       }
+      logger.warning('Failed to fetch note $uuid: ${response.statusCode}');
       return null;
     } catch (e) {
+      logger.error('Error fetching note $uuid', e);
       return null;
     }
   }
@@ -315,13 +379,22 @@ class ApiService {
   /// Create note on API
   Future<Map<String, dynamic>?> createNote(
       Map<String, dynamic> noteData) async {
+    final logger = ref.read(loggerServiceProvider);
+    final noteTitle = noteData['title'] ?? 'Untitled';
+    logger.info('Creating note: $noteTitle');
+
     try {
       final response = await post('/notes', body: noteData);
       if (response.statusCode == 201) {
-        return jsonDecode(response.body);
+        final result = jsonDecode(response.body);
+        logger.info('Successfully created note: $noteTitle');
+        return result;
       }
+      logger
+          .warning('Failed to create note $noteTitle: ${response.statusCode}');
       return null;
     } catch (e) {
+      logger.error('Error creating note $noteTitle', e);
       return null;
     }
   }
@@ -329,14 +402,24 @@ class ApiService {
   /// Create note in specific notebook
   Future<Map<String, dynamic>?> createNoteInNotebook(
       String notebookUuid, Map<String, dynamic> noteData) async {
+    final logger = ref.read(loggerServiceProvider);
+    final noteTitle = noteData['title'] ?? 'Untitled';
+    logger.info(
+        'Creating note in notebook: $noteTitle (notebook: $notebookUuid)');
+
     try {
       final response =
           await post('/notebooks/$notebookUuid/notes', body: noteData);
       if (response.statusCode == 201) {
-        return jsonDecode(response.body);
+        final result = jsonDecode(response.body);
+        logger.info('Successfully created note in notebook: $noteTitle');
+        return result;
       }
+      logger.warning(
+          'Failed to create note in notebook $noteTitle: ${response.statusCode}');
       return null;
     } catch (e) {
+      logger.error('Error creating note in notebook $noteTitle', e);
       return null;
     }
   }
@@ -344,23 +427,41 @@ class ApiService {
   /// Update note on API
   Future<Map<String, dynamic>?> updateNote(
       String uuid, Map<String, dynamic> noteData) async {
+    final logger = ref.read(loggerServiceProvider);
+    final noteTitle = noteData['title'] ?? 'Untitled';
+    logger.info('Updating note: $noteTitle ($uuid)');
+
     try {
       final response = await put('/notes/$uuid', body: noteData);
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final result = jsonDecode(response.body);
+        logger.info('Successfully updated note: $noteTitle');
+        return result;
       }
+      logger
+          .warning('Failed to update note $noteTitle: ${response.statusCode}');
       return null;
     } catch (e) {
+      logger.error('Error updating note $noteTitle', e);
       return null;
     }
   }
 
   /// Delete note from API
   Future<bool> deleteNote(String uuid) async {
+    final logger = ref.read(loggerServiceProvider);
+    logger.info('Deleting note: $uuid');
+
     try {
       final response = await delete('/notes/$uuid');
-      return response.statusCode == 200;
+      if (response.statusCode == 200) {
+        logger.info('Successfully deleted note: $uuid');
+        return true;
+      }
+      logger.warning('Failed to delete note $uuid: ${response.statusCode}');
+      return false;
     } catch (e) {
+      logger.error('Error deleting note $uuid', e);
       return false;
     }
   }
@@ -368,6 +469,9 @@ class ApiService {
   /// Sync notes with API
   Future<Map<String, dynamic>?> syncNotes(
       List<Map<String, dynamic>> changes) async {
+    final logger = ref.read(loggerServiceProvider);
+    logger.info('Syncing ${changes.length} note changes with API');
+
     try {
       final syncData = {
         'last_sync': null, // TODO: implement last sync tracking
@@ -377,10 +481,14 @@ class ApiService {
 
       final response = await post('/sync/notes', body: syncData);
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final result = jsonDecode(response.body);
+        logger.info('Successfully synced ${changes.length} note changes');
+        return result;
       }
+      logger.warning('Failed to sync notes: ${response.statusCode}');
       return null;
     } catch (e) {
+      logger.error('Error syncing notes', e);
       return null;
     }
   }
@@ -388,6 +496,9 @@ class ApiService {
   /// Sync notebooks with API
   Future<Map<String, dynamic>?> syncNotebooks(
       List<Map<String, dynamic>> changes) async {
+    final logger = ref.read(loggerServiceProvider);
+    logger.info('Syncing ${changes.length} notebook changes with API');
+
     try {
       final syncData = {
         'last_sync': null, // TODO: implement last sync tracking
@@ -397,10 +508,14 @@ class ApiService {
 
       final response = await post('/sync/notebooks', body: syncData);
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final result = jsonDecode(response.body);
+        logger.info('Successfully synced ${changes.length} notebook changes');
+        return result;
       }
+      logger.warning('Failed to sync notebooks: ${response.statusCode}');
       return null;
     } catch (e) {
+      logger.error('Error syncing notebooks', e);
       return null;
     }
   }
@@ -446,7 +561,8 @@ class ApiService {
   }
 
   /// Example login method
-  Future<LoginResponse?> login({required String email, required String password}) async {
+  Future<LoginResponse?> login(
+      {required String email, required String password}) async {
     final logger = ref.read(loggerServiceProvider);
     logger.info('Login attempt for email: $email');
     try {
@@ -457,17 +573,18 @@ class ApiService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final loginResponse = LoginResponse.fromJson(data);
-        
+
         await setToken(loginResponse.accessToken);
         logger.info('Login successful for email: $email');
-        
+
         // Log API version information
         if (loginResponse.isApiVersionCompatible) {
           logger.info('API version compatible: ${loginResponse.apiVersion}');
         } else {
-          logger.warning('API version incompatible: ${loginResponse.apiVersion}');
+          logger
+              .warning('API version incompatible: ${loginResponse.apiVersion}');
         }
-        
+
         return loginResponse;
       } else {
         logger.warning(
@@ -576,5 +693,75 @@ class ApiService {
       isLoggedIn = await _checkAndRefreshToken();
     }
     ref.read(isLoggedInProvider.notifier).state = isLoggedIn;
+  }
+
+  // Sharing methods
+  /// Share a note
+  Future<ShareResponse?> shareNote(
+      String noteId, ShareRequest shareRequest) async {
+    final logger = ref.read(loggerServiceProvider);
+    logger.info('Sharing note: $noteId (type: ${shareRequest.shareType})');
+
+    try {
+      final response = await post(
+        '/protected/notes/$noteId/share',
+        body: jsonEncode(shareRequest.toJson()),
+      );
+
+      if (response.statusCode == 201) {
+        final result = ShareResponse.fromJson(jsonDecode(response.body));
+        logger.info('Successfully shared note: $noteId');
+        return result;
+      }
+      logger.warning('Failed to share note $noteId: ${response.statusCode}');
+      return null;
+    } catch (e) {
+      logger.error('Error sharing note $noteId', e);
+      return null;
+    }
+  }
+
+  /// Get shared notes for current user
+  Future<List<SharedNote>> getSharedNotes() async {
+    try {
+      final response = await get('/protected/shares');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List<dynamic> sharesData = data['shares'] ?? [];
+        return sharesData.map((json) => SharedNote.fromJson(json)).toList();
+      }
+      return [];
+    } catch (e) {
+      ref.read(loggerServiceProvider).error('Failed to get shared notes', e);
+      return [];
+    }
+  }
+
+  /// Get specific shared note
+  Future<SharedNote?> getSharedNote(String shareId) async {
+    try {
+      final response = await get('/protected/shares/$shareId');
+
+      if (response.statusCode == 200) {
+        return SharedNote.fromJson(jsonDecode(response.body));
+      }
+      return null;
+    } catch (e) {
+      ref.read(loggerServiceProvider).error('Failed to get shared note', e);
+      return null;
+    }
+  }
+
+  /// Delete a share
+  Future<bool> deleteShare(String shareId) async {
+    try {
+      final response = await delete('/protected/shares/$shareId');
+
+      return response.statusCode == 200;
+    } catch (e) {
+      ref.read(loggerServiceProvider).error('Failed to delete share', e);
+      return false;
+    }
   }
 }

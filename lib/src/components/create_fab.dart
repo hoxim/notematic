@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/ui_provider.dart';
-import '../providers/logger_provider.dart';
 
 class CreateFAB extends ConsumerWidget {
   final Animation<double> animation;
@@ -20,8 +19,6 @@ class CreateFAB extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isExpanded = ref.watch(fabExpandedProvider);
-    final logger = ref.read(loggerServiceProvider);
-    logger.debug('CreateFAB build, isExpanded: $isExpanded');
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.end,
@@ -40,7 +37,6 @@ class CreateFAB extends ConsumerWidget {
                     scale: animation,
                     child: FloatingActionButton.extended(
                       onPressed: () {
-                        logger.debug('Create notebook pressed!');
                         ref.read(fabExpandedProvider.notifier).toggle();
                         onCreateNotebook();
                       },
@@ -62,7 +58,6 @@ class CreateFAB extends ConsumerWidget {
                     scale: animation,
                     child: FloatingActionButton.extended(
                       onPressed: () {
-                        logger.debug('Create note pressed!');
                         ref.read(fabExpandedProvider.notifier).toggle();
                         onCreateNote();
                       },
@@ -79,7 +74,6 @@ class CreateFAB extends ConsumerWidget {
           ),
         FloatingActionButton(
           onPressed: () {
-            logger.debug('FAB pressed! isExpanded: $isExpanded');
             ref.read(fabExpandedProvider.notifier).toggle();
             onToggle();
           },

@@ -5,6 +5,7 @@ import '../providers/user_provider.dart';
 class UserProfileMenu extends ConsumerWidget {
   final VoidCallback onProfileTap;
   final VoidCallback onSettingsTap;
+  final VoidCallback onSharedNotesTap;
   final VoidCallback onAboutTap;
   final VoidCallback onLogoutTap;
 
@@ -12,6 +13,7 @@ class UserProfileMenu extends ConsumerWidget {
     super.key,
     required this.onProfileTap,
     required this.onSettingsTap,
+    required this.onSharedNotesTap,
     required this.onAboutTap,
     required this.onLogoutTap,
   });
@@ -97,6 +99,16 @@ class UserProfileMenu extends ConsumerWidget {
           ),
         ),
         PopupMenuItem<String>(
+          value: 'shared_notes',
+          child: Row(
+            children: [
+              const Icon(Icons.share, size: 20),
+              const SizedBox(width: 12),
+              const Text('Shared Notes'),
+            ],
+          ),
+        ),
+        PopupMenuItem<String>(
           value: 'about',
           child: Row(
             children: [
@@ -125,6 +137,9 @@ class UserProfileMenu extends ConsumerWidget {
             break;
           case 'settings':
             onSettingsTap();
+            break;
+          case 'shared_notes':
+            onSharedNotesTap();
             break;
           case 'about':
             onAboutTap();
