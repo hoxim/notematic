@@ -13,7 +13,6 @@ import '../components/search_bar.dart';
 import '../components/search_results_list.dart';
 import '../components/user_profile_menu.dart';
 import '../components/create_fab.dart';
-import '../components/sync_toggle.dart';
 import '../components/share_note_dialog.dart';
 import 'note_view_screen.dart';
 import 'create_note_screen.dart';
@@ -71,29 +70,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(
         title: const Text('Notematic'),
         actions: [
-          // Sync toggle
-          SyncToggle(
-            onSyncNow: () async {
-              try {
-                final syncService = ref.read(unifiedSyncServiceProvider);
-                await syncService.fullSync();
-
-                // Refresh data after sync
-                ref.read(notesProvider.notifier).refresh();
-                ref.read(notebooksProvider.notifier).refresh();
-
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Sync completed successfully')),
-                );
-              } catch (e) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Sync failed: $e')),
-                );
-              }
-            },
-          ),
+          // Sync toggle moved to Settings screen
           // User profile menu
           UserProfileMenu(
             onProfileTap: () {
