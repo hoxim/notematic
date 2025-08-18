@@ -7,9 +7,18 @@ import '../models/share_models.dart';
 import '../config/app_config.dart';
 import '../providers/logger_provider.dart';
 import '../providers/user_provider.dart';
+import '../providers/token_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final apiServiceProvider = Provider<ApiService>((ref) => ApiService(ref));
+
+class OAuthConflictException implements Exception {
+  final int statusCode;
+  final String body;
+  OAuthConflictException(this.statusCode, this.body);
+  @override
+  String toString() => 'OAuthConflictException(status=$statusCode, body=$body)';
+}
 
 /// Service for API communication and token management
 class ApiService {
@@ -206,7 +215,7 @@ class ApiService {
     logger.info('Fetching notebooks from API');
 
     try {
-      final response = await get('/notebooks');
+      final response = await get('/protected/notebooks');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data is Map<String, dynamic> && data.containsKey('notebooks')) {
@@ -230,7 +239,7 @@ class ApiService {
     logger.info('Fetching notebook: $uuid');
 
     try {
-      final response = await get('/notebooks/$uuid');
+      final response = await get('/protected/notebooks/$uuid');
       if (response.statusCode == 200) {
         logger.info('Successfully fetched notebook: $uuid');
         return jsonDecode(response.body);
@@ -251,7 +260,7 @@ class ApiService {
     logger.info('Creating notebook: $notebookName');
 
     try {
-      final response = await post('/notebooks', body: notebookData);
+      final response = await post('/protected/notebooks', body: notebookData);
       if (response.statusCode == 201) {
         final result = jsonDecode(response.body);
         logger.info('Successfully created notebook: $notebookName');
@@ -274,7 +283,8 @@ class ApiService {
     logger.info('Updating notebook: $notebookName ($uuid)');
 
     try {
-      final response = await put('/notebooks/$uuid', body: notebookData);
+      final response =
+          await put('/protected/notebooks/$uuid', body: notebookData);
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
         logger.info('Successfully updated notebook: $notebookName');
@@ -295,7 +305,7 @@ class ApiService {
     logger.info('Deleting notebook: $uuid');
 
     try {
-      final response = await delete('/notebooks/$uuid');
+      final response = await delete('/protected/notebooks/$uuid');
       if (response.statusCode == 200) {
         logger.info('Successfully deleted notebook: $uuid');
         return true;
@@ -314,7 +324,7 @@ class ApiService {
     logger.info('Fetching notes from API');
 
     try {
-      final response = await get('/notes');
+      final response = await get('/protected/notes');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data is Map<String, dynamic> && data.containsKey('notes')) {
@@ -338,7 +348,7 @@ class ApiService {
     logger.info('Fetching notes from notebook: $notebookUuid');
 
     try {
-      final response = await get('/notebooks/$notebookUuid/notes');
+      final response = await get('/protected/notebooks/$notebookUuid/notes');
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data is Map<String, dynamic> && data.containsKey('notes')) {
@@ -363,7 +373,7 @@ class ApiService {
     logger.info('Fetching note: $uuid');
 
     try {
-      final response = await get('/notes/$uuid');
+      final response = await get('/protected/notes/$uuid');
       if (response.statusCode == 200) {
         logger.info('Successfully fetched note: $uuid');
         return jsonDecode(response.body);
@@ -384,7 +394,7 @@ class ApiService {
     logger.info('Creating note: $noteTitle');
 
     try {
-      final response = await post('/notes', body: noteData);
+      final response = await post('/protected/notes', body: noteData);
       if (response.statusCode == 201) {
         final result = jsonDecode(response.body);
         logger.info('Successfully created note: $noteTitle');
@@ -408,8 +418,8 @@ class ApiService {
         'Creating note in notebook: $noteTitle (notebook: $notebookUuid)');
 
     try {
-      final response =
-          await post('/notebooks/$notebookUuid/notes', body: noteData);
+      final response = await post('/protected/notebooks/$notebookUuid/notes',
+          body: noteData);
       if (response.statusCode == 201) {
         final result = jsonDecode(response.body);
         logger.info('Successfully created note in notebook: $noteTitle');
@@ -432,7 +442,7 @@ class ApiService {
     logger.info('Updating note: $noteTitle ($uuid)');
 
     try {
-      final response = await put('/notes/$uuid', body: noteData);
+      final response = await put('/protected/notes/$uuid', body: noteData);
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
         logger.info('Successfully updated note: $noteTitle');
@@ -453,7 +463,7 @@ class ApiService {
     logger.info('Deleting note: $uuid');
 
     try {
-      final response = await delete('/notes/$uuid');
+      final response = await delete('/protected/notes/$uuid');
       if (response.statusCode == 200) {
         logger.info('Successfully deleted note: $uuid');
         return true;
@@ -628,6 +638,79 @@ class ApiService {
     await clearToken();
   }
 
+  /// Login with OAuth provider
+  Future<LoginResponse?> loginWithOAuth({
+    required String email,
+    required String oauthToken,
+    required String provider, // 'google', 'github', 'facebook'
+    Map<String, dynamic>? oauthData,
+  }) async {
+    final logger = ref.read(loggerServiceProvider);
+    logger
+        .info('OAuth login attempt for email: $email with provider: $provider');
+
+    try {
+      final response = await post('/oauth/login',
+          body: jsonEncode({
+            'email': email,
+            'oauth_token': oauthToken,
+            'provider': provider,
+            'oauth_data': oauthData,
+          }));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final loginResponse = LoginResponse.fromJson(data);
+
+        // Save token
+        await setToken(loginResponse.accessToken);
+
+        logger.info('OAuth login successful for email: $email');
+        return loginResponse;
+      } else if (response.statusCode == 409) {
+        // Account exists with local auth; signal UI to run linking flow
+        throw OAuthConflictException(response.statusCode, response.body);
+      } else {
+        logger.warning(
+          'OAuth login failed for email: $email, status: ${response.statusCode}, body: ${response.body}',
+        );
+      }
+    } catch (e, st) {
+      logger.error('OAuth login error for email: $email', e, st);
+    }
+    return null;
+  }
+
+  /// Link currently logged-in user with an OAuth provider (requires Authorization header)
+  Future<bool> linkOAuthProvider({
+    required String email,
+    required String provider,
+    required String oauthToken,
+    Map<String, dynamic>? oauthData,
+  }) async {
+    final logger = ref.read(loggerServiceProvider);
+    logger.info('Linking OAuth provider: $provider to $email');
+    try {
+      final response = await post('/oauth/link',
+          body: jsonEncode({
+            'email': email,
+            'oauth_token': oauthToken,
+            'provider': provider,
+            'oauth_data': oauthData,
+          }));
+      if (response.statusCode == 200) {
+        logger.info('Linked $provider to $email');
+        return true;
+      }
+      logger.warning(
+          'Failed to link $provider to $email: ${response.statusCode} ${response.body}');
+      return false;
+    } catch (e, st) {
+      logger.error('Error linking $provider to $email', e, st);
+      return false;
+    }
+  }
+
   /// Check if API is available (for offline detection)
   Future<bool> isApiAvailable() async {
     try {
@@ -635,6 +718,24 @@ class ApiService {
       return response.statusCode == 200;
     } catch (e) {
       return false;
+    }
+  }
+
+  /// Get current account providers status (local/google)
+  Future<Map<String, dynamic>?> getAccountProviders() async {
+    final logger = ref.read(loggerServiceProvider);
+    try {
+      final response = await get('/protected/account');
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        return data;
+      }
+      logger.warning(
+          'Failed to get account providers: ${response.statusCode} ${response.body}');
+      return null;
+    } catch (e, st) {
+      logger.error('Error getting account providers', e, st);
+      return null;
     }
   }
 
@@ -691,6 +792,15 @@ class ApiService {
     bool isLoggedIn = false;
     if (token != null && token.isNotEmpty) {
       isLoggedIn = await _checkAndRefreshToken();
+
+      // If logged in, get user email from token service and set it in user provider
+      if (isLoggedIn) {
+        final tokenService = ref.read(tokenServiceProvider);
+        final userEmail = await tokenService.getUserId();
+        if (userEmail != null && userEmail.isNotEmpty) {
+          ref.read(userProvider.notifier).setUser(userEmail);
+        }
+      }
     }
     ref.read(isLoggedInProvider.notifier).state = isLoggedIn;
   }

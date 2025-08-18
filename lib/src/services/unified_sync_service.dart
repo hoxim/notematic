@@ -94,24 +94,10 @@ class UnifiedSyncService {
 
       _logger.info('Starting full sync...');
 
-      // Check if we have dirty items first
-      final dirtyNotes = await _storage.getDirtyNotes();
-      final dirtyNotebooks = await _storage.getDirtyNotebooks();
+      // Always sync from server to local first
+      await _syncFromServer();
 
-      if (dirtyNotes.isEmpty && dirtyNotebooks.isEmpty) {
-        _logger.info('No dirty items to sync, skipping server sync');
-        return;
-      }
-
-      _logger.info(
-          'Found ${dirtyNotes.length} dirty notes and ${dirtyNotebooks.length} dirty notebooks');
-
-      // Sync from server to local (only if we have local changes)
-      if (dirtyNotes.isNotEmpty || dirtyNotebooks.isNotEmpty) {
-        await _syncFromServer();
-      }
-
-      // Sync from local to server
+      // Then sync from local to server (only dirty items)
       await _syncToServer();
 
       _logger.info('Full sync completed successfully');

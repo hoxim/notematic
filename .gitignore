@@ -9,6 +9,7 @@
 .buildlog/
 .history
 .env
+.env.example
 .env.local
 .env.development
 .env.production
@@ -81,3 +82,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+/oauth
+debug-key.properties
+key.properties
+

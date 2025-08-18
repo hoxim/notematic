@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/api_service.dart';
 import '../services/token_service.dart';
+import '../services/google_auth_service.dart';
 import '../providers/token_provider.dart';
+import '../providers/user_provider.dart';
+import '../providers/logger_provider.dart';
+import '../providers/pending_oauth_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -16,10 +20,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _passwordVisible = false;
   bool _isLoading = false;
   String? _errorMessage;
   late final ApiService _apiService;
   late final TokenService _tokenService;
+  late final GoogleAuthService _googleAuthService;
 
   // API status
   bool _isCheckingApi = false;
@@ -30,8 +36,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.initState();
     _apiService = ref.read(apiServiceProvider);
     _tokenService = ref.read(tokenServiceProvider);
+    _googleAuthService = ref.read(googleAuthServiceProvider);
+    _initializeGoogleAuth();
     _checkApiStatus();
     _loadAutoLogin();
+  }
+
+  Future<void> _initializeGoogleAuth() async {
+    final logger = ref.read(loggerServiceProvider);
+    logger.info('Initializing Google Auth Service...');
+    await _googleAuthService.initialize();
+    logger.info('Google Auth Service initialized');
   }
 
   Future<void> _checkApiStatus() async {
@@ -82,9 +97,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _isLoading = true;
       _errorMessage = null;
     });
-    final loginResponse = await _apiService.login(email: email, password: password);
+    final loginResponse =
+        await _apiService.login(email: email, password: password);
     if (loginResponse != null) {
       await _tokenService.saveUserEmail(email);
+      // Set user email in provider
+      ref.read(userProvider.notifier).setUser(email);
+
+      // If there is a pending OAuth link request (e.g., from Google 409), link it now
+      final pending = ref.read(pendingOAuthLinkProvider);
+      if (pending != null && pending.email == email) {
+        final logger = ref.read(loggerServiceProvider);
+        logger.info('Attempting to link ${pending.provider} to $email');
+        final linked = await _apiService.linkOAuthProvider(
+          email: pending.email,
+          provider: pending.provider,
+          oauthToken: pending.oauthToken,
+          oauthData: pending.oauthData,
+        );
+        if (linked) {
+          logger.info('Successfully linked ${pending.provider} to $email');
+          ref.read(pendingOAuthLinkProvider.notifier).state = null;
+        } else {
+          logger.warning('Failed to link ${pending.provider} to $email');
+        }
+      }
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/home');
       }
@@ -98,7 +135,80 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
   }
 
-  // Google login temporarily disabled.
+  /// Handle Google Sign-In
+  Future<void> _handleGoogleSignIn() async {
+    final logger = ref.read(loggerServiceProvider);
+    logger.info('🔐 LoginScreen: Starting Google Sign-In');
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final account = await _googleAuthService.authenticateAndGetAccount();
+
+      if (account != null) {
+        logger.info('📧 Calling API for email: ${account.email}');
+        final payload = {
+          'provider': 'google',
+          'provider_id': account.id,
+          'name': account.displayName,
+          'picture': account.photoUrl,
+          'email_verified': true,
+        };
+
+        try {
+          final loginResponse = await _apiService.loginWithOAuth(
+            email: account.email,
+            oauthToken: 'google_token_placeholder',
+            provider: 'google',
+            oauthData: payload,
+          );
+
+          if (loginResponse != null) {
+            logger.info('🎉 API login successful');
+            await _tokenService.saveUserEmail(account.email);
+            ref.read(userProvider.notifier).setUser(account.email);
+            if (mounted) {
+              Navigator.of(context).pushReplacementNamed('/home');
+            }
+          } else {
+            logger.warning('❌ API login failed');
+            setState(() {
+              _errorMessage = 'Google login failed. Please try again.';
+            });
+          }
+        } on OAuthConflictException {
+          // Save pending link data and prompt password login
+          ref.read(pendingOAuthLinkProvider.notifier).state =
+              PendingOAuthLinkData(
+            email: account.email,
+            provider: 'google',
+            oauthToken: 'google_token_placeholder',
+            oauthData: payload,
+          );
+          logger.warning(
+              'Account exists with local authentication. Ask user to login with password to link.');
+          setState(() {
+            _errorMessage =
+                'This email is already registered with password. Sign in with your password to link Google.';
+          });
+        }
+      } else {
+        logger.info('ℹ️ Google Sign-In cancelled by user');
+      }
+    } catch (e) {
+      logger.error('💥 Google Sign-In error: $e');
+      setState(() {
+        _errorMessage = 'Google Sign-In failed. Please try again.';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -150,12 +260,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _passwordController,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Password',
                           border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.lock),
+                          prefixIcon: const Icon(Icons.lock),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _passwordVisible
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            onPressed: () {
+                              setState(
+                                  () => _passwordVisible = !_passwordVisible);
+                            },
+                          ),
                         ),
-                        obscureText: true,
+                        obscureText: !_passwordVisible,
                         textInputAction: TextInputAction.done,
                         validator: (v) =>
                             v == null || v.isEmpty ? 'Enter password' : null,
@@ -194,6 +315,44 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   ),
                                 )
                               : const Text('Sign in'),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      // Divider
+                      Row(
+                        children: [
+                          Expanded(child: Divider()),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              'or',
+                              style: TextStyle(
+                                color: theme.colorScheme.onSurface
+                                    .withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ),
+                          Expanded(child: Divider()),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      // Google Sign-In button
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _isLoading ? null : _handleGoogleSignIn,
+                          icon: Image.asset(
+                            'assets/google_logo.png',
+                            height: 20,
+                            width: 20,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Icon(Icons.g_mobiledata, size: 20);
+                            },
+                          ),
+                          label: const Text('Continue with Google'),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
                         ),
                       ),
                     ],

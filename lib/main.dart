@@ -8,10 +8,13 @@ import 'src/screens/create_note_screen.dart';
 import 'src/config/app_config.dart';
 import 'src/screens/login_screen.dart';
 import 'src/screens/register_screen.dart';
+import 'src/screens/settings_screen.dart';
+import 'src/screens/profile_screen.dart';
 import 'src/services/unified_storage_service.dart';
 import 'src/providers/user_provider.dart';
 import 'src/themes/app_theme_dark.dart';
 import 'src/themes/app_theme_light.dart';
+import 'src/providers/theme_provider.dart';
 
 // ObjectBox will be initialized when needed by the services
 
@@ -43,19 +46,23 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final themeModeAsync = ref.watch(themeModeProvider);
+    final themeMode = themeModeAsync.value ?? ThemeMode.system;
     return MaterialApp(
       title: 'Notematic',
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: appLightTheme,
       darkTheme: appDarkTheme,
-      themeMode: ThemeMode.system,
-      home: AuthWrapper(onToggleTheme: () {}, themeMode: ThemeMode.system),
+      themeMode: themeMode,
+      home: AuthWrapper(onToggleTheme: () {}, themeMode: themeMode),
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/home': (context) => const HomeScreen(),
         '/create-note': (context) => const CreateNoteScreen(),
+        '/settings': (context) => const SettingsScreen(),
+        '/profile': (context) => const ProfileScreen(),
       },
     );
   }

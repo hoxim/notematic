@@ -71,12 +71,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       appBar: AppBar(
         title: const Text('Notematic'),
         actions: [
-          // Search bar
-          Expanded(
-            child: NotesSearchBar(
-              controller: _searchController,
-            ),
-          ),
           // Sync toggle
           SyncToggle(
             onSyncNow: () async {
@@ -103,10 +97,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // User profile menu
           UserProfileMenu(
             onProfileTap: () {
-              // Handle profile tap
+              Navigator.of(context).pushNamed('/profile');
             },
             onSettingsTap: () {
-              // Handle settings tap
+              Navigator.of(context).pushNamed('/settings');
             },
             onSharedNotesTap: () {
               Navigator.of(context).push(
@@ -122,8 +116,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               );
             },
-            onLogoutTap: () {
-              ref.read(userProvider.notifier).logout();
+            onLogoutTap: () async {
+              await ref.read(userProvider.notifier).completeLogout();
+              if (!context.mounted) return;
+              Navigator.of(context)
+                  .pushNamedAndRemoveUntil('/login', (route) => false);
             },
           ),
         ],
@@ -194,6 +191,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Show main content
     return Column(
       children: [
+        // Search bar
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: NotesSearchBar(
+            controller: _searchController,
+          ),
+        ),
         // Toggle buttons
         Padding(
           padding: const EdgeInsets.all(16.0),
@@ -693,7 +697,7 @@ class _CreateNoteDialogState extends ConsumerState<CreateNoteDialog> {
             // Notebook selection dropdown
             if (notebooksAsync.hasValue)
               DropdownButtonFormField<String>(
-                value: _selectedNotebookUuid,
+                initialValue: _selectedNotebookUuid,
                 decoration: const InputDecoration(
                   labelText: 'Notebook',
                   border: OutlineInputBorder(),
@@ -863,7 +867,7 @@ class _CreateNotebookDialogState extends ConsumerState<CreateNotebookDialog> {
             const SizedBox(height: 16),
             // Color picker
             DropdownButtonFormField<String>(
-              value: _selectedColor,
+              initialValue: _selectedColor,
               decoration: const InputDecoration(
                 labelText: 'Color',
                 border: OutlineInputBorder(),

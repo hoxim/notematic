@@ -76,7 +76,7 @@ class _ShareNoteDialogState extends ConsumerState<ShareNoteDialog> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<ShareType>(
-              value: _selectedShareType,
+              initialValue: _selectedShareType,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
                 contentPadding:

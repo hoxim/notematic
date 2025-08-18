@@ -33,7 +33,7 @@ final ThemeData appLightTheme = ThemeData.light().copyWith(
     backgroundColor: kVeryLightGray, // Drawer background
   ),
   // Scaffold background color (main app background)
-  scaffoldBackgroundColor: kPink,
+  scaffoldBackgroundColor: kVeryLightGray,
   // ElevatedButton default style
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(

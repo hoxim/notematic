@@ -108,7 +108,7 @@ class _CreateNoteScreenState extends ConsumerState<CreateNoteScreen> {
                     }
 
                     return DropdownButtonFormField<String>(
-                      value: validUuid,
+                      initialValue: validUuid,
                       decoration: const InputDecoration(
                         labelText: 'Notebook',
                         border: OutlineInputBorder(),
