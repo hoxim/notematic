@@ -179,8 +179,10 @@ class UnifiedSyncService {
             try {
               final apiNote = await _apiService.createNote(note.toApiMap());
               if (apiNote != null) {
-                await _storage.markNoteAsSynced(note.uuid,
-                    apiNote['version'] ?? DateTime.now().toIso8601String());
+                await _storage.markNoteAsSynced(
+                    note.uuid,
+                    apiNote['version']?.toString() ??
+                        DateTime.now().toIso8601String());
                 _logger.info('Note created and synced: ${note.title}');
                 notesSynced++;
               } else {
@@ -197,8 +199,10 @@ class UnifiedSyncService {
               final apiNote =
                   await _apiService.updateNote(note.uuid, note.toApiMap());
               if (apiNote != null) {
-                await _storage.markNoteAsSynced(note.uuid,
-                    apiNote['version'] ?? DateTime.now().toIso8601String());
+                await _storage.markNoteAsSynced(
+                    note.uuid,
+                    apiNote['version']?.toString() ??
+                        DateTime.now().toIso8601String());
                 _logger.info('Note updated and synced: ${note.title}');
                 notesSynced++;
               } else {
@@ -257,8 +261,10 @@ class UnifiedSyncService {
               final apiNotebook =
                   await _apiService.createNotebook(notebook.toApiMap());
               if (apiNotebook != null) {
-                await _storage.markNotebookAsSynced(notebook.uuid,
-                    apiNotebook['version'] ?? DateTime.now().toIso8601String());
+                await _storage.markNotebookAsSynced(
+                    notebook.uuid,
+                    apiNotebook['version']?.toString() ??
+                        DateTime.now().toIso8601String());
                 _logger.info('Created notebook on server: ${notebook.name}');
                 notebooksSynced++;
               } else {
@@ -275,8 +281,10 @@ class UnifiedSyncService {
               final apiNotebook = await _apiService.updateNotebook(
                   notebook.uuid, notebook.toApiMap());
               if (apiNotebook != null) {
-                await _storage.markNotebookAsSynced(notebook.uuid,
-                    apiNotebook['version'] ?? DateTime.now().toIso8601String());
+                await _storage.markNotebookAsSynced(
+                    notebook.uuid,
+                    apiNotebook['version']?.toString() ??
+                        DateTime.now().toIso8601String());
                 _logger.info('Updated notebook on server: ${notebook.name}');
                 notebooksSynced++;
               } else {
@@ -333,8 +341,10 @@ class UnifiedSyncService {
         try {
           final apiNote = await _apiService.createNote(note.toApiMap());
           if (apiNote != null) {
-            await _storage.markNoteAsSynced(note.uuid,
-                apiNote['version'] ?? DateTime.now().toIso8601String());
+            await _storage.markNoteAsSynced(
+                note.uuid,
+                apiNote['version']?.toString() ??
+                    DateTime.now().toIso8601String());
           } else {
             await _storage.markNoteAsSynced(
                 note.uuid, DateTime.now().toIso8601String());
@@ -380,8 +390,10 @@ class UnifiedSyncService {
           final apiNotebook =
               await _apiService.createNotebook(notebook.toApiMap());
           if (apiNotebook != null) {
-            await _storage.markNotebookAsSynced(notebook.uuid,
-                apiNotebook['version'] ?? DateTime.now().toIso8601String());
+            await _storage.markNotebookAsSynced(
+                notebook.uuid,
+                apiNotebook['version']?.toString() ??
+                    DateTime.now().toIso8601String());
           } else {
             await _storage.markNotebookAsSynced(
                 notebook.uuid, DateTime.now().toIso8601String());
@@ -427,7 +439,9 @@ class UnifiedSyncService {
             final apiNote = await _apiService.updateNote(uuid, note.toApiMap());
             if (apiNote != null) {
               await _storage.markNoteAsSynced(
-                  uuid, apiNote['version'] ?? DateTime.now().toIso8601String());
+                  uuid,
+                  apiNote['version']?.toString() ??
+                      DateTime.now().toIso8601String());
             } else {
               await _storage.markNoteAsSynced(
                   uuid, DateTime.now().toIso8601String());
@@ -470,8 +484,10 @@ class UnifiedSyncService {
             final apiNotebook =
                 await _apiService.updateNotebook(uuid, notebook.toApiMap());
             if (apiNotebook != null) {
-              await _storage.markNotebookAsSynced(uuid,
-                  apiNotebook['version'] ?? DateTime.now().toIso8601String());
+              await _storage.markNotebookAsSynced(
+                  uuid,
+                  apiNotebook['version']?.toString() ??
+                      DateTime.now().toIso8601String());
             } else {
               await _storage.markNotebookAsSynced(
                   uuid, DateTime.now().toIso8601String());
@@ -696,8 +712,8 @@ class UnifiedSyncService {
     } else if (note.isOffline) {
       final apiNote = await _apiService.createNote(note.toApiMap());
       if (apiNote != null) {
-        await _storage.markNoteAsSynced(
-            note.uuid, apiNote['version'] ?? DateTime.now().toIso8601String());
+        await _storage.markNoteAsSynced(note.uuid,
+            apiNote['version']?.toString() ?? DateTime.now().toIso8601String());
       } else {
         await _storage.markNoteAsSynced(
             note.uuid, DateTime.now().toIso8601String());
@@ -706,8 +722,8 @@ class UnifiedSyncService {
     } else {
       final apiNote = await _apiService.updateNote(note.uuid, note.toApiMap());
       if (apiNote != null) {
-        await _storage.markNoteAsSynced(
-            note.uuid, apiNote['version'] ?? DateTime.now().toIso8601String());
+        await _storage.markNoteAsSynced(note.uuid,
+            apiNote['version']?.toString() ?? DateTime.now().toIso8601String());
       } else {
         await _storage.markNoteAsSynced(
             note.uuid, DateTime.now().toIso8601String());
@@ -728,6 +744,11 @@ class UnifiedSyncService {
 
     final notebook = await _storage.getNotebookByUuid(uuid);
     if (notebook == null) throw Exception('Notebook not found');
+
+    _logger.info('Starting sync for notebook: ${notebook.name} (UUID: $uuid)');
+    _logger.info(
+        'Notebook state before sync - isOffline: ${notebook.isOffline}, isDirty: ${notebook.isDirty}, deleted: ${notebook.deleted}');
+
     if (notebook.deleted) {
       await _apiService.deleteNotebook(notebook.uuid);
       await _storage.markNotebookAsSynced(
@@ -736,24 +757,39 @@ class UnifiedSyncService {
     } else if (notebook.isOffline) {
       final apiNotebook = await _apiService.createNotebook(notebook.toApiMap());
       if (apiNotebook != null) {
-        await _storage.markNotebookAsSynced(notebook.uuid,
-            apiNotebook['version'] ?? DateTime.now().toIso8601String());
+        await _storage.markNotebookAsSynced(
+            notebook.uuid,
+            apiNotebook['version']?.toString() ??
+                DateTime.now().toIso8601String());
+        _logger.info('Notebook created and synced: ${notebook.name}');
       } else {
         await _storage.markNotebookAsSynced(
             notebook.uuid, DateTime.now().toIso8601String());
+        _logger
+            .info('Notebook created locally but sync failed: ${notebook.name}');
       }
-      _logger.info('Notebook created and synced: ${notebook.name}');
     } else {
       final apiNotebook =
           await _apiService.updateNotebook(notebook.uuid, notebook.toApiMap());
       if (apiNotebook != null) {
-        await _storage.markNotebookAsSynced(notebook.uuid,
-            apiNotebook['version'] ?? DateTime.now().toIso8601String());
+        await _storage.markNotebookAsSynced(
+            notebook.uuid,
+            apiNotebook['version']?.toString() ??
+                DateTime.now().toIso8601String());
+        _logger.info('Notebook updated and synced: ${notebook.name}');
       } else {
         await _storage.markNotebookAsSynced(
             notebook.uuid, DateTime.now().toIso8601String());
+        _logger
+            .info('Notebook updated locally but sync failed: ${notebook.name}');
       }
-      _logger.info('Notebook updated and synced: ${notebook.name}');
+    }
+
+    // Verify the sync worked
+    final updatedNotebook = await _storage.getNotebookByUuid(uuid);
+    if (updatedNotebook != null) {
+      _logger.info(
+          'Notebook state after sync - isOffline: ${updatedNotebook.isOffline}, isDirty: ${updatedNotebook.isDirty}, serverVersion: ${updatedNotebook.serverVersion}');
     }
   }
 }

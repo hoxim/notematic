@@ -2,8 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:drift/native.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:notematic_app/src/services/unified_storage_service.dart';
-import 'package:notematic_app/src/services/logger_service.dart';
+import 'package:Notematic/src/services/unified_storage_service.dart';
+import 'package:Notematic/src/services/logger_service.dart';
 
 void main() {
   setUpAll(() {

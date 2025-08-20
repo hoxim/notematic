@@ -4,10 +4,14 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../services/logger_service.dart';
 
 class AppConfig {
+  // JSON loading disabled; using .env only
+
   // Helper method to get config from dotenv or use empty string
   static String _getEnv(String key) {
     return dotenv.env[key] ?? '';
   }
+
+  static Future<void> initialize() async {}
 
   static String get apiBaseUrl {
     final host = _getEnv('API_HOST');
@@ -74,22 +78,46 @@ class AppConfig {
 
   // Platform-specific Google OAuth getters
   static String get googleClientId {
-    // Prefer JSON assets if present; fallback to .env
-    final ids = _loadGoogleIdsFromAssetsSync();
-    if (ids.$1.isNotEmpty) return ids.$1;
-    // Fallback to existing env logic
+    // .env only
     if (isWebPlatform) return googleClientIdWeb;
     if (isDesktopPlatform) return googleClientIdDesktop;
-    if (isMobilePlatform) return googleClientIdAndroid;
+    if (isMobilePlatform) {
+      if (Platform.isAndroid) {
+        if (kDebugMode) {
+          return googleClientIdAndroidDebug.isNotEmpty
+              ? googleClientIdAndroidDebug
+              : googleClientIdAndroid; // fallback to legacy
+        } else {
+          return googleClientIdAndroidRelease.isNotEmpty
+              ? googleClientIdAndroidRelease
+              : googleClientIdAndroid; // fallback to legacy
+        }
+      }
+      // For iOS, use legacy
+      return googleClientIdAndroid;
+    }
     return '';
   }
 
   static String get googleServerClientId {
-    final ids = _loadGoogleIdsFromAssetsSync();
-    if (ids.$2.isNotEmpty) return ids.$2;
+    // .env only
     if (isWebPlatform) return googleServerClientIdWeb;
     if (isDesktopPlatform) return googleServerClientIdDesktop;
-    if (isMobilePlatform) return googleServerClientIdAndroid;
+    if (isMobilePlatform) {
+      if (Platform.isAndroid) {
+        if (kDebugMode) {
+          return googleServerClientIdAndroidDebug.isNotEmpty
+              ? googleServerClientIdAndroidDebug
+              : googleServerClientIdAndroid; // fallback to legacy
+        } else {
+          return googleServerClientIdAndroidRelease.isNotEmpty
+              ? googleServerClientIdAndroidRelease
+              : googleServerClientIdAndroid; // fallback to legacy
+        }
+      }
+      // For iOS, use legacy
+      return googleServerClientIdAndroid;
+    }
     return '';
   }
 
@@ -179,33 +207,8 @@ class AppConfig {
     logger.info('========================');
   }
 
-  // Load Google OAuth client IDs from bundled JSON assets (oauth/*.json)
-  // Returns (clientId, serverClientId); serverClientId may be empty if not present in file
-  static (String, String) _loadGoogleIdsFromAssetsSync() {
-    try {
-      final path = _selectOauthAssetPath();
-      if (path == null) return ('', '');
-      // Note: synchronous rootBundle load is not available; this method will be used only for reading values lazily at runtime
-      // We provide a lazy cache via environment; if needed, switch to async initialization path.
-      return ('', '');
-    } catch (_) {
-      return ('', '');
-    }
-  }
+  static (String, String) _loadGoogleIdsFromAssetsSync() => ('', '');
 
   // Decide which JSON file to use based on platform and mode
-  static String? _selectOauthAssetPath() {
-    if (isWebPlatform) {
-      return 'oauth/client_secret_892029182992-ionifa21f0g894gaaog7ju4goluqqaoj.apps.googleusercontent.com.json';
-    }
-    if (isDesktopPlatform) {
-      return 'oauth/client_secret_892029182992-ub0gt2bn049khef3c852ppmjo8tfq7ee.apps.googleusercontent.com.json';
-    }
-    if (isMobilePlatform && Platform.isAndroid) {
-      return kDebugMode
-          ? 'oauth/client_secret_892029182992-b6p84bl6l3bjrjkehup2nikq68e4je25.apps.googleusercontent.com.json'
-          : 'oauth/client_secret_892029182992-felsgkrftdua596qsrs4j9rqo47pmg0r.apps.googleusercontent.com.json';
-    }
-    return null;
-  }
+  static String? _selectOauthAssetPath() => null;
 }

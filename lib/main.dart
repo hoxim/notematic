@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'src/providers/logger_provider.dart';
 import 'src/services/api_service.dart';
 import 'src/screens/home_screen.dart';
-import 'src/screens/create_note_screen.dart';
+import 'src/screens/note_edit_screen.dart';
 import 'src/config/app_config.dart';
 import 'src/screens/login_screen.dart';
 import 'src/screens/register_screen.dart';
@@ -60,7 +60,7 @@ class MyApp extends ConsumerWidget {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/home': (context) => const HomeScreen(),
-        '/create-note': (context) => const CreateNoteScreen(),
+        '/create-note': (context) => const NoteEditScreen(),
         '/settings': (context) => const SettingsScreen(),
         '/profile': (context) => const ProfileScreen(),
       },

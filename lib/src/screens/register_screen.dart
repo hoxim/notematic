@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../config/app_config.dart';
 import '../services/api_service.dart';
 import '../services/google_auth_service.dart';
 import '../providers/logger_provider.dart';
+import 'package:google_sign_in_platform_interface/google_sign_in_platform_interface.dart'
+    as gpi;
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -24,20 +28,45 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   // API status (placeholder)
   String _apiStatus = 'up';
   bool _isCheckingApi = false;
+  StreamSubscription<gpi.AuthenticationEvent>? _authSub;
 
   @override
   void initState() {
     super.initState();
     _apiService = ref.read(apiServiceProvider);
     _googleAuthService = ref.read(googleAuthServiceProvider);
-    _initializeGoogleAuth();
+    // Google Auth initialization is now handled by FutureBuilder for web
+    // and by _handleGoogleRegister for native platforms
     _checkApiStatus();
-  }
 
-  Future<void> _initializeGoogleAuth() async {
-    final logger = ref.read(loggerServiceProvider);
-    logger.info('RegisterScreen: Initializing Google Auth Service...');
-    await _googleAuthService.initialize();
+    if (AppConfig.isWebPlatform) {
+      _authSub = gpi.GoogleSignInPlatform.instance.authenticationEvents
+          ?.listen((event) async {
+        final logger = ref.read(loggerServiceProvider);
+        try {
+          // For web, we get a credential (JWT) from Google Identity Services
+          // The event structure depends on the GIS flow, but we can access credential
+          final credential = event.toString(); // Temporary workaround
+          logger.info('Web Google Sign-In event received: $credential');
+
+          // For now, we'll use a placeholder approach
+          // In a real implementation, you'd extract the JWT from the event
+          // and send it to your backend for verification
+          logger.info('Web Google Sign-In - JWT would be sent to backend');
+
+          // Placeholder: simulate successful login
+          setState(() {
+            _errorMessage =
+                'Web Google Sign-In not fully implemented yet. Use Android/Desktop for now.';
+          });
+        } catch (e) {
+          logger.error('Web Google auth event error: $e');
+          setState(() {
+            _errorMessage = 'Google Sign-In error: $e';
+          });
+        }
+      });
+    }
   }
 
   Future<void> _checkApiStatus() async {
@@ -123,6 +152,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   void dispose() {
+    _authSub?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -266,17 +296,62 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ],
                       ),
                       const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: _isLoading ? null : _handleGoogleRegister,
-                          icon: const Icon(Icons.g_mobiledata),
-                          label: const Text('Sign up with Google'),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                      if (AppConfig.isWebPlatform)
+                        FutureBuilder(
+                          future: _googleAuthService.initialize(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState ==
+                                ConnectionState.waiting) {
+                              return const SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton(
+                                  onPressed: null,
+                                  child: SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  ),
+                                ),
+                              );
+                            }
+                            if (snapshot.hasError) {
+                              return const SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton(
+                                  onPressed: null,
+                                  child: Text('Google Sign-In Error'),
+                                ),
+                              );
+                            }
+                            return SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed:
+                                    _isLoading ? null : _handleGoogleRegister,
+                                icon: const Icon(Icons.g_mobiledata),
+                                label: const Text('Sign up with Google'),
+                                style: OutlinedButton.styleFrom(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      else
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed:
+                                _isLoading ? null : _handleGoogleRegister,
+                            icon: const Icon(Icons.g_mobiledata),
+                            label: const Text('Sign up with Google'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
                           ),
                         ),
-                      ),
                     ],
                   ),
                 ),

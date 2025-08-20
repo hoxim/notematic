@@ -71,18 +71,21 @@ class NotesGridView extends ConsumerWidget {
           );
         }
 
-        // Google Keep style - automatic column adjustment
-        const double cardMaxWidth = 340.0; // Maximum card width
-        const double spacing = 8.0; // Spacing between cards
-
-        // Calculate exact number of columns
+        // Calculate number of columns based on screen width
         final screenWidth = MediaQuery.of(context).size.width;
-        final availableWidth = screenWidth - 16; // 16px padding from each side
-        final columnWidth = cardMaxWidth + spacing;
-        int crossAxisCount = (availableWidth / columnWidth).floor();
+        int crossAxisCount;
 
-        // Minimum 1 column
-        if (crossAxisCount < 1) crossAxisCount = 1;
+        if (screenWidth > 1200) {
+          crossAxisCount = 4; // Large screens/desktops
+        } else if (screenWidth > 800) {
+          crossAxisCount = 3; // Tablets landscape
+        } else if (screenWidth > 400) {
+          crossAxisCount = 2; // Phones and tablets portrait
+        } else {
+          crossAxisCount = 1; // Very small screens
+        }
+
+        const double spacing = 8.0; // Spacing between cards
 
         return MasonryGridView.count(
           padding: const EdgeInsets.all(8),

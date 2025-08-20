@@ -538,9 +538,17 @@ class UnifiedStorageService {
     try {
       final notebook = await getNotebookByUuid(uuid);
       if (notebook != null) {
+        _logger.info('Marking notebook as synced: ${notebook.name} (UUID: $uuid)');
+        _logger.info('Before markAsSynced - isOffline: ${notebook.isOffline}, isDirty: ${notebook.isDirty}');
+        
         notebook.markAsSynced(serverVersion);
+        
+        _logger.info('After markAsSynced - isOffline: ${notebook.isOffline}, isDirty: ${notebook.isDirty}, serverVersion: ${notebook.serverVersion}');
+        
         await _saveNotebook(notebook);
         _logger.info('Marked notebook as synced: ${notebook.name}');
+      } else {
+        _logger.warning('Notebook not found for marking as synced: $uuid');
       }
     } catch (e) {
       _logger.error('Failed to mark notebook as synced: $e');

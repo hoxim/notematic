@@ -15,7 +15,7 @@ import '../components/user_profile_menu.dart';
 import '../components/create_fab.dart';
 import '../components/share_note_dialog.dart';
 import 'note_view_screen.dart';
-import 'create_note_screen.dart';
+import 'note_edit_screen.dart';
 import 'about_screen.dart';
 import 'shared_notes_screen.dart';
 import '../providers/sync_service_provider.dart';
@@ -341,7 +341,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (!context.mounted) return;
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const CreateNoteScreen()),
+      MaterialPageRoute(builder: (context) => const NoteEditScreen()),
     );
   }
 

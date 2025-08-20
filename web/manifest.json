@@ -1,6 +1,6 @@
 {
-    "name": "notematic_app",
-    "short_name": "notematic_app",
+    "name": "Notematic",
+    "short_name": "Notematic",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/notes_provider.dart';
-import 'create_note_screen.dart';
+import 'note_edit_screen.dart';
 import '../providers/sync_service_provider.dart';
 
 class NoteViewScreen extends ConsumerStatefulWidget {
@@ -167,28 +167,10 @@ class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
 
             // Content
             Text(
-              'Content',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+              note['content'] ?? '',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    height: 1.5,
                   ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white24
-                      : Colors.black26,
-                ),
-              ),
-              child: Text(
-                note['content'] ?? '',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
             ),
             const SizedBox(height: 24),
 
@@ -291,7 +273,7 @@ class _NoteViewScreenState extends ConsumerState<NoteViewScreen> {
     final updatedNote = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
-        builder: (context) => CreateNoteScreen(
+        builder: (context) => NoteEditScreen(
           noteToEdit: _note,
         ),
       ),
